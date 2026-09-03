@@ -15,8 +15,8 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QFont, QFontDatabase, QGradient, QIcon,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
-from PySide6.QtWidgets import (QApplication, QCheckBox, QPushButton, QSizePolicy,
-    QWidget)
+from PySide6.QtWidgets import (QApplication, QCheckBox, QLineEdit, QPushButton,
+    QSizePolicy, QWidget)
 
 class Ui_Widget(object):
     def setupUi(self, Widget):
@@ -25,16 +25,18 @@ class Ui_Widget(object):
         Widget.resize(800, 600)
         self.checkBox = QCheckBox(Widget)
         self.checkBox.setObjectName(u"checkBox")
-        self.checkBox.setGeometry(QRect(310, 130, 76, 20))
+        self.checkBox.setGeometry(QRect(210, 60, 91, 20))
         self.checkBox.setChecked(False)
         self.pushButton = QPushButton(Widget)
         self.pushButton.setObjectName(u"pushButton")
-        self.pushButton.setGeometry(QRect(300, 80, 75, 24))
-        self.pushButton.setStyleSheet(u"QPushButton:pressed{\n"
-"	checkbox = QCheckBox(\"Subscribe to newsletter\")\n"
-"\n"
-"    checkbox.setChecked(True)\n"
-"}")
+        self.pushButton.setGeometry(QRect(90, 50, 91, 24))
+        self.pushButton.setStyleSheet(u"")
+        self.nome = QLineEdit(Widget)
+        self.nome.setObjectName(u"nome")
+        self.nome.setGeometry(QRect(200, 300, 113, 22))
+        self.btn_nome = QPushButton(Widget)
+        self.btn_nome.setObjectName(u"btn_nome")
+        self.btn_nome.setGeometry(QRect(340, 300, 75, 24))
 
         self.retranslateUi(Widget)
 
@@ -45,5 +47,6 @@ class Ui_Widget(object):
         Widget.setWindowTitle(QCoreApplication.translate("Widget", u"Widget", None))
         self.checkBox.setText(QCoreApplication.translate("Widget", u"CheckBox", None))
         self.pushButton.setText(QCoreApplication.translate("Widget", u"PushButton", None))
+        self.btn_nome.setText(QCoreApplication.translate("Widget", u"Nome", None))
     # retranslateUi
 
