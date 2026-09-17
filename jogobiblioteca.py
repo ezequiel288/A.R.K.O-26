@@ -1,7 +1,7 @@
 import os
 import time
 
-class Jogo_Biblioteca:
+class JogoBiblioteca:
 
     def __init__(self, jogoBIB):
         self.__jogoBIB = jogoBIB

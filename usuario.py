@@ -107,4 +107,5 @@ class Usuario:
         self.salvar_dados()
 
         print("Usuário removido com sucesso.")
+
     
