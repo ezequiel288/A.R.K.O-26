@@ -1,5 +1,17 @@
 import os
 import time
+from pathlib import Path
+import csv
+
+# --------------------------------
+# CONFIGURAÇÃO DO ARQUIVO
+# --------------------------------
+
+DIRETORIO_DADOS = Path("dados")
+
+DIRETORIO_DADOS.mkdir(exist_ok=True)
+
+ARQUIVO_usuario = DIRETORIO_DADOS / "usuario.csv"
 
 class Usuario:
 
@@ -108,4 +120,81 @@ class Usuario:
 
         print("Usuário removido com sucesso.")
 
+    def para_csv(self):
+        return [
+            self.nome,
+            self.senha,
+            self.email
+        ]
     
+
+
+
+    # --------------------------------
+    # SALVAR
+    # --------------------------------
+
+    def salvar_usuarios(usuarios):
+
+        with open(ARQUIVO_usuario, 
+            "w",
+            newline="",
+            encoding="utf-8"
+        ) as arquivo:
+
+            escritor = csv.writer(arquivo)
+
+            escritor.writerow(
+                ["nome", "senha", "email"]
+            )
+
+            for usuario in usuario:
+                escritor.writerow(
+                    usuario.para_csv()
+                )
+
+        print("\nDados salvos com sucesso!") 
+
+    # --------------------------------
+    # CARREGAR
+    # --------------------------------
+
+    def carregar_usuarios():
+
+        usuarios = []
+
+        # Verifica se o arquivo existe
+        if not ARQUIVO_usuario.exists():
+            return usuarios
+
+        with open(
+            ARQUIVO_usuario,
+            "r",
+            newline="",
+            encoding="utf-8"
+        ) as arquivo:
+
+            leitor = csv.reader(arquivo)
+
+            # Ignora o cabeçalho
+            next(leitor, None)
+
+            for linha in leitor:
+
+                nome = linha[0]
+                senha = linha[1]
+                email = linha[2]
+
+            usuario = Usuario(
+                    nome,
+                    senha,
+                    email
+                )
+
+            usuario.append(usuario)
+
+        return usuarios
+
+
+
+

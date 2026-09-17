@@ -1,14 +1,16 @@
 import os
 import time
+from pathlib import Path
+import csv
 
-from usuario import Usuario
-from jogo import Jogo
-from biblioteca import Biblioteca
-from amigo import Amigo
-from jogobiblioteca import JogoBiblioteca
-from carrinho import Carrinho
-from transacao import Transacao
-from avaliacao import Avaliacao
+from usuario import *
+from jogo import *
+from biblioteca import *
+from amigo import *
+from jogobiblioteca import *
+from carrinho import *
+from transacao import *
+from avaliacao import *
 
 # ──────────────────────────────────────────
 #  LISTAS DE ARMAZENAMENTO GLOBAL
@@ -24,11 +26,15 @@ amigos = []
 transacoes = []
 
 
-# ──────────────────────────────────────────
+#──────────────────────────────────────────
 #  SUBMENU — USUÁRIOS
 # ──────────────────────────────────────────
+
 def menu_usuario():
     limpar_tela()
+    usuarios = carregar_usuarios()
+    print(f"\n{len(usuarios)} usuario(s) carregado(s).")
+
     while True:
         print("\n" + "="*40)
         print("           MENU USUÁRIOS")
@@ -36,6 +42,7 @@ def menu_usuario():
         print("1 - Cadastrar Usuário")
         print("2 - Alterar usuário")
         print("3 - Listar usuários")
+        print("4 - Salvar usuários")
         print("0 - Voltar")
 
         opcao = input("Escolha uma opção: ")
@@ -65,12 +72,19 @@ def menu_usuario():
 
             input("\nPressione ENTER para voltar...")
 
+        
+        elif opcao == "4":
+
+            salvar_usuarios(usuarios)
+
+
         elif opcao == "0":
             limpar_tela()
             break
 
         else:
             print("Opção inválida.")
+
 
 # ──────────────────────────────────────────
 #  SUBMENU — JOGOS
@@ -493,8 +507,10 @@ def limpar_tela():
 # ──────────────────────────────────────────
 #  MENU PRINCIPAL
 # ──────────────────────────────────────────
+    
 def main():
     limpar_tela()
+    
     while True:
         print("\n" + "="*50)
         print("       SISTEMA DE DISTRIBUIÇÃO DE JOGOS A.R.K.O")
@@ -549,6 +565,8 @@ def main():
         else:
             print("Função não implementada ou inválida.")
 
-
 if __name__ == "__main__":
     main()
+
+
+
