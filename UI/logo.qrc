@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="fundo">
+    <file>geometric-shape-with-shadow-png.webp</file>
+  </qresource>
+</RCC>
