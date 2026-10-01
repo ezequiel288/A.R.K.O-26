@@ -40,31 +40,57 @@
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>120</width>
-        <height>611</height>
+        <width>1321</width>
+        <height>821</height>
        </rect>
       </property>
+      <property name="styleSheet">
+       <string notr="true">QFrame { 
+		background-color:  #202020; 
+		border:  none; 
+}</string>
+      </property>
       <property name="title">
-       <string>GroupBox</string>
+       <string/>
       </property>
       <widget class="QListWidget" name="Menu1">
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>31</y>
-         <width>101</width>
-         <height>551</height>
+         <y>10</y>
+         <width>121</width>
+         <height>811</height>
         </rect>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QFrame { 
+		background-color:  #000000; 
+		border:  none; 
+}</string>
        </property>
       </widget>
       <widget class="QPushButton" name="Store">
        <property name="geometry">
         <rect>
-         <x>20</x>
-         <y>180</y>
-         <width>81</width>
+         <x>30</x>
+         <y>200</y>
+         <width>91</width>
          <height>31</height>
         </rect>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QPushButton {
+    background-color: #000000;
+    color: white;
+    border: 2px solid #FFFFFF;
+    border-radius: 10px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #00FF00;
+    color: black;
+}</string>
        </property>
        <property name="text">
         <string>Store</string>
@@ -73,52 +99,93 @@
       <widget class="QPushButton" name="Biblioteca">
        <property name="geometry">
         <rect>
-         <x>20</x>
-         <y>210</y>
-         <width>81</width>
+         <x>30</x>
+         <y>240</y>
+         <width>91</width>
          <height>31</height>
         </rect>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QPushButton {
+    background-color: #000000;
+    color: white;
+    border: 2px solid #FFFFFF;
+    border-radius: 10px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #00FF00;
+    color: black;
+}</string>
        </property>
        <property name="text">
         <string>Biblioteca</string>
        </property>
       </widget>
-      <widget class="QPushButton" name="ARKO">
+      <widget class="QListWidget" name="Menu2">
        <property name="geometry">
         <rect>
-         <x>30</x>
-         <y>80</y>
-         <width>51</width>
-         <height>51</height>
+         <x>130</x>
+         <y>10</y>
+         <width>1181</width>
+         <height>191</height>
+        </rect>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QFrame { 
+		background-color:  #000000; 
+		border:  none; 
+}</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="Logo">
+       <property name="geometry">
+        <rect>
+         <x>40</x>
+         <y>60</y>
+         <width>81</width>
+         <height>101</height>
         </rect>
        </property>
        <property name="text">
         <string/>
        </property>
+       <property name="pixmap">
+        <pixmap resource="../../../../Downloads/Imagens.qrc">:/Logo/WhatsApp Image 2026-10-01 at 15.10.22 (1).jpeg</pixmap>
+       </property>
+       <property name="scaledContents">
+        <bool>true</bool>
+       </property>
       </widget>
-     </widget>
-     <widget class="QScrollBar" name="Scroll1">
-      <property name="geometry">
-       <rect>
-        <x>1300</x>
-        <y>20</y>
-        <width>16</width>
-        <height>771</height>
-       </rect>
-      </property>
-      <property name="orientation">
-       <enum>Qt::Vertical</enum>
-      </property>
-     </widget>
-     <widget class="QListWidget" name="Menu1_2">
-      <property name="geometry">
-       <rect>
-        <x>130</x>
-        <y>30</y>
-        <width>1161</width>
-        <height>131</height>
-       </rect>
-      </property>
+      <widget class="QLineEdit" name="Pesquisar1">
+       <property name="geometry">
+        <rect>
+         <x>190</x>
+         <y>110</y>
+         <width>471</width>
+         <height>31</height>
+        </rect>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QLineEdit {
+    background-color: #000000;
+    color: white;
+    border: 2px solid #FFFFFF;
+    border-radius: 8px;
+}
+
+QLineEdit:hover {
+    background-color: #FOFOFO;
+    color: white;
+    border: 2px solid #008000;
+}
+</string>
+       </property>
+       <property name="text">
+        <string>🔍  Pesquisar  </string>
+       </property>
+      </widget>
      </widget>
      <widget class="QPushButton" name="Amigos">
       <property name="geometry">
@@ -128,6 +195,20 @@
         <width>75</width>
         <height>31</height>
        </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">QPushButton {
+    background-color: #000000;
+    color: white;
+    border: 2px solid #FFFFFF;
+    border-radius: 10px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #00FF00;
+    color: black;
+}</string>
       </property>
       <property name="text">
        <string>Amigos</string>
@@ -142,34 +223,146 @@
         <height>31</height>
        </rect>
       </property>
+      <property name="styleSheet">
+       <string notr="true">QPushButton {
+    background-color: #000000;
+    color: white;
+    border: 2px solid #FFFFFF;
+    border-radius: 10px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #00FF00;
+    color: black;
+}</string>
+      </property>
       <property name="text">
        <string>Carrinho</string>
-      </property>
-     </widget>
-     <widget class="QLineEdit" name="Pesquisar1">
-      <property name="geometry">
-       <rect>
-        <x>160</x>
-        <y>110</y>
-        <width>471</width>
-        <height>31</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Pesquisar</string>
       </property>
      </widget>
      <widget class="QPushButton" name="Conta">
       <property name="geometry">
        <rect>
-        <x>1210</x>
+        <x>1190</x>
         <y>90</y>
         <width>51</width>
         <height>51</height>
        </rect>
       </property>
+      <property name="font">
+       <font>
+        <weight>75</weight>
+        <bold>true</bold>
+       </font>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">QPushButton {
+    background-color: #000000;
+    color: white;
+    border: 2px solid #FFFFFF;
+    border-radius: 10px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #00FF00;
+    color: black;
+}</string>
+      </property>
+      <property name="text">
+       <string>👤</string>
+      </property>
+      <property name="iconSize">
+       <size>
+        <width>100</width>
+        <height>100</height>
+       </size>
+      </property>
+     </widget>
+     <widget class="QListWidget" name="Menu3">
+      <property name="geometry">
+       <rect>
+        <x>130</x>
+        <y>180</y>
+        <width>1181</width>
+        <height>641</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">QFrame { 
+		background-color:  #000000; 
+		border:  none; 
+}</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="pushButton">
+      <property name="geometry">
+       <rect>
+        <x>180</x>
+        <y>180</y>
+        <width>181</width>
+        <height>271</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">QPushButton {
+    background-color: #000000;
+    color: white;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #808080;
+    color: black;
+}</string>
+      </property>
+      <property name="text">
+       <string notr="true"/>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label">
+      <property name="geometry">
+       <rect>
+        <x>190</x>
+        <y>190</y>
+        <width>161</width>
+        <height>221</height>
+       </rect>
+      </property>
       <property name="text">
        <string/>
+      </property>
+      <property name="pixmap">
+       <pixmap resource="../../../../Downloads/GTA6.qrc">:/GTA6/images.jfif</pixmap>
+      </property>
+      <property name="scaledContents">
+       <bool>true</bool>
+      </property>
+     </widget>
+     <widget class="QScrollBar" name="Scroll1">
+      <property name="geometry">
+       <rect>
+        <x>1280</x>
+        <y>150</y>
+        <width>16</width>
+        <height>631</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">QScrollBar:vertical {
+    background: #FOFOFO;
+    width: 10px;
+}
+
+QScrollBar::handle:vertical {
+    background: #00FF00;
+    border-radius: 5px;
+}
+</string>
+      </property>
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
       </property>
      </widget>
     </widget>
@@ -187,6 +380,9 @@
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
- <resources/>
+ <resources>
+  <include location="../../../../Downloads/Imagens.qrc"/>
+  <include location="../../../../Downloads/GTA6.qrc"/>
+ </resources>
  <connections/>
 </ui>
