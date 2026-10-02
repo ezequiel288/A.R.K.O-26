@@ -65,7 +65,8 @@
        <property name="styleSheet">
         <string notr="true">QFrame { 
 		background-color:  #000000; 
-		border:  none; 
+		border: 2px solid #FFFFFF;
+		border-radius: 8px;
 }</string>
        </property>
       </widget>
@@ -73,8 +74,8 @@
        <property name="geometry">
         <rect>
          <x>30</x>
-         <y>200</y>
-         <width>91</width>
+         <y>220</y>
+         <width>81</width>
          <height>31</height>
         </rect>
        </property>
@@ -100,8 +101,8 @@ QPushButton:hover {
        <property name="geometry">
         <rect>
          <x>30</x>
-         <y>240</y>
-         <width>91</width>
+         <y>260</y>
+         <width>81</width>
          <height>31</height>
         </rect>
        </property>
@@ -123,26 +124,10 @@ QPushButton:hover {
         <string>Biblioteca</string>
        </property>
       </widget>
-      <widget class="QListWidget" name="Menu2">
-       <property name="geometry">
-        <rect>
-         <x>130</x>
-         <y>10</y>
-         <width>1181</width>
-         <height>191</height>
-        </rect>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">QFrame { 
-		background-color:rgb(0, 0, 0); 
-		border:  none; 
-}</string>
-       </property>
-      </widget>
       <widget class="QLabel" name="Logo">
        <property name="geometry">
         <rect>
-         <x>40</x>
+         <x>30</x>
          <y>60</y>
          <width>81</width>
          <height>101</height>
@@ -152,17 +137,34 @@ QPushButton:hover {
         <string/>
        </property>
        <property name="pixmap">
-        <pixmap resource="../../../../Downloads/Imagens.qrc">:/Logo/WhatsApp Image 2026-10-01 at 15.10.22 (1).jpeg</pixmap>
+        <pixmap resource="Imagens.qrc">:/Logo/WhatsApp Image 2026-10-01 at 15.10.22 (1).jpeg</pixmap>
        </property>
        <property name="scaledContents">
         <bool>true</bool>
+       </property>
+      </widget>
+      <widget class="QListWidget" name="Menu3_2">
+       <property name="geometry">
+        <rect>
+         <x>130</x>
+         <y>10</y>
+         <width>1181</width>
+         <height>171</height>
+        </rect>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QFrame { 
+		background-color:  #000000; 
+		border: 2px solid #FFFFFF;
+		border-radius: 8px;
+}</string>
        </property>
       </widget>
       <widget class="QLineEdit" name="Pesquisar1">
        <property name="geometry">
         <rect>
          <x>190</x>
-         <y>110</y>
+         <y>80</y>
          <width>471</width>
          <height>31</height>
         </rect>
@@ -191,7 +193,7 @@ QLineEdit:hover {
       <property name="geometry">
        <rect>
         <x>930</x>
-        <y>110</y>
+        <y>80</y>
         <width>75</width>
         <height>31</height>
        </rect>
@@ -217,8 +219,8 @@ QPushButton:hover {
      <widget class="QPushButton" name="Carrinho">
       <property name="geometry">
        <rect>
-        <x>1010</x>
-        <y>110</y>
+        <x>1020</x>
+        <y>80</y>
         <width>75</width>
         <height>31</height>
        </rect>
@@ -244,8 +246,8 @@ QPushButton:hover {
      <widget class="QPushButton" name="Conta">
       <property name="geometry">
        <rect>
-        <x>1190</x>
-        <y>90</y>
+        <x>1220</x>
+        <y>70</y>
         <width>51</width>
         <height>51</height>
        </rect>
@@ -292,7 +294,8 @@ QPushButton:hover {
       <property name="styleSheet">
        <string notr="true">QFrame { 
 		background-color:  #000000; 
-		border:  none; 
+		border: 2px solid #FFFFFF;
+		border-radius: 8px;
 }</string>
       </property>
      </widget>
@@ -300,7 +303,7 @@ QPushButton:hover {
       <property name="geometry">
        <rect>
         <x>180</x>
-        <y>180</y>
+        <y>220</y>
         <width>181</width>
         <height>271</height>
        </rect>
@@ -325,7 +328,7 @@ QPushButton:hover {
       <property name="geometry">
        <rect>
         <x>190</x>
-        <y>190</y>
+        <y>230</y>
         <width>161</width>
         <height>221</height>
        </rect>
@@ -334,7 +337,7 @@ QPushButton:hover {
        <string/>
       </property>
       <property name="pixmap">
-       <pixmap resource="../../../../Downloads/GTA6.qrc">:/GTA6/images.jfif</pixmap>
+       <pixmap resource="GTA6.qrc">:/GTA6/images.jfif</pixmap>
       </property>
       <property name="scaledContents">
        <bool>true</bool>
@@ -344,9 +347,9 @@ QPushButton:hover {
       <property name="geometry">
        <rect>
         <x>1280</x>
-        <y>150</y>
-        <width>16</width>
-        <height>631</height>
+        <y>190</y>
+        <width>20</width>
+        <height>601</height>
        </rect>
       </property>
       <property name="styleSheet">
@@ -381,8 +384,10 @@ QScrollBar::handle:vertical {
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
  <resources>
-  <include location="../../../../Downloads/Imagens.qrc"/>
+  <include location="Imagens.qrc"/>
+  <include location="GTA6.qrc"/>
   <include location="../../../../Downloads/GTA6.qrc"/>
+  <include location="../../../../Downloads/Imagens.qrc"/>
  </resources>
  <connections/>
 </ui>
