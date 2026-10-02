@@ -134,7 +134,7 @@ QPushButton:hover {
        </property>
        <property name="styleSheet">
         <string notr="true">QFrame { 
-		background-color:rgb(94, 94, 94); 
+		background-color:  #000000; 
 		border:  none; 
 }</string>
        </property>
