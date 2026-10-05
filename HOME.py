@@ -309,6 +309,7 @@ def menu_carrinho():
 # ──────────────────────────────────────────
 #  SUBMENU — AVALIAÇÕES
 # ──────────────────────────────────────────
+
 def menu_avaliacoes():
     limpar_tela()
     while True:
