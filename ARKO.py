@@ -177,6 +177,15 @@ class Ui_MainWindow(object):
 "        border-radius: 8px;\n"
 "}")
         self.Menu3.setObjectName("Menu3")
+        self.BemVindo = QtWidgets.QLabel(parent=self.Barra1)
+        self.BemVindo.setGeometry(QtCore.QRect(130, 180, 1181, 641))
+        self.BemVindo.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        font = QtGui.QFont()
+        font.setPointSize(20)
+        font.setBold(True)
+        self.BemVindo.setFont(font)
+        self.BemVindo.setStyleSheet("color: #FFFFFF; background: transparent; font-weight: bold;")
+        self.BemVindo.setObjectName("BemVindo")
         self.SELgta6 = QtWidgets.QPushButton(parent=self.Barra1)
         self.SELgta6.setGeometry(QtCore.QRect(180, 230, 201, 321))
         self.SELgta6.setStyleSheet("QPushButton {\n"
@@ -249,8 +258,50 @@ class Ui_MainWindow(object):
         self.Minecraft.setPixmap(carregar_imagem(":/Minecraft/3cdc624293ae885a197906ba94b1475a.png", "js.png"))
         self.Minecraft.setScaledContents(True)
         self.Minecraft.setObjectName("Minecraft")
+        self.BibliotecaBT = QtWidgets.QPushButton(parent=self.Barra1)
+        self.BibliotecaBT.setGeometry(QtCore.QRect(286, 250, 75, 25))
+        self.BibliotecaBT.setStyleSheet("QPushButton {\n"
+"    background-color: #000000;\n"
+"    color: white;\n"
+"    border: 1px solid #00FF00;\n"
+"    border-radius: 6px;\n"
+"    font-weight: bold;\n"
+"}\n"
+"QPushButton:hover {\n"
+"    background-color: #00FF00;\n"
+"    color: black;\n"
+"}")
+        self.BibliotecaBT.setObjectName("BibliotecaBT")
+        self.BibliotecaBT_2 = QtWidgets.QPushButton(parent=self.Barra1)
+        self.BibliotecaBT_2.setGeometry(QtCore.QRect(516, 250, 75, 25))
+        self.BibliotecaBT_2.setStyleSheet("QPushButton {\n"
+"    background-color: #000000;\n"
+"    color: white;\n"
+"    border: 1px solid #00FF00;\n"
+"    border-radius: 6px;\n"
+"    font-weight: bold;\n"
+"}\n"
+"QPushButton:hover {\n"
+"    background-color: #00FF00;\n"
+"    color: black;\n"
+"}")
+        self.BibliotecaBT_2.setObjectName("BibliotecaBT_2")
+        self.BibliotecaBT_3 = QtWidgets.QPushButton(parent=self.Barra1)
+        self.BibliotecaBT_3.setGeometry(QtCore.QRect(746, 250, 75, 25))
+        self.BibliotecaBT_3.setStyleSheet("QPushButton {\n"
+"    background-color: #000000;\n"
+"    color: white;\n"
+"    border: 1px solid #00FF00;\n"
+"    border-radius: 6px;\n"
+"    font-weight: bold;\n"
+"}\n"
+"QPushButton:hover {\n"
+"    background-color: #00FF00;\n"
+"    color: black;\n"
+"}")
+        self.BibliotecaBT_3.setObjectName("BibliotecaBT_3")
         self.ComprarBT = QtWidgets.QPushButton(parent=self.Barra1)
-        self.ComprarBT.setGeometry(QtCore.QRect(190, 480, 91, 31))
+        self.ComprarBT.setGeometry(QtCore.QRect(200, 480, 171, 31))
         self.ComprarBT.setStyleSheet("QPushButton {\n"
 "    background-color: #FFFFFF;\n"
 "    color: black;\n"
@@ -263,21 +314,6 @@ class Ui_MainWindow(object):
 "    color: white;\n"
 "}")
         self.ComprarBT.setObjectName("ComprarBT")
-        self.CarrinhoBT = QtWidgets.QPushButton(parent=self.Barra1)
-        self.CarrinhoBT.setGeometry(QtCore.QRect(290, 480, 81, 31))
-        self.CarrinhoBT.setStyleSheet("QPushButton {\n"
-"    background-color: #000000;\n"
-"    color: white;\n"
-"    border: 2px solid #FFFFFF;\n"
-"    border-radius: 10px;\n"
-"    font-weight: bold;\n"
-"}\n"
-"\n"
-"QPushButton:hover {\n"
-"    background-color: #00FF00;\n"
-"    color: black;\n"
-"}")
-        self.CarrinhoBT.setObjectName("CarrinhoBT")
         self.Preco = QtWidgets.QPushButton(parent=self.Barra1)
         self.Preco.setGeometry(QtCore.QRect(200, 520, 171, 21))
         font = QtGui.QFont()
@@ -294,7 +330,7 @@ class Ui_MainWindow(object):
 "}")
         self.Preco.setObjectName("Preco")
         self.ComprarBT_2 = QtWidgets.QPushButton(parent=self.Barra1)
-        self.ComprarBT_2.setGeometry(QtCore.QRect(420, 480, 91, 31))
+        self.ComprarBT_2.setGeometry(QtCore.QRect(430, 480, 171, 31))
         self.ComprarBT_2.setStyleSheet("QPushButton {\n"
 "    background-color: #FFFFFF;\n"
 "    color: black;\n"
@@ -307,23 +343,8 @@ class Ui_MainWindow(object):
 "    color: white;\n"
 "}")
         self.ComprarBT_2.setObjectName("ComprarBT_2")
-        self.CarrinhoBT_2 = QtWidgets.QPushButton(parent=self.Barra1)
-        self.CarrinhoBT_2.setGeometry(QtCore.QRect(520, 480, 81, 31))
-        self.CarrinhoBT_2.setStyleSheet("QPushButton {\n"
-"    background-color: #000000;\n"
-"    color: white;\n"
-"    border: 2px solid #FFFFFF;\n"
-"    border-radius: 10px;\n"
-"    font-weight: bold;\n"
-"}\n"
-"\n"
-"QPushButton:hover {\n"
-"    background-color: #00FF00;\n"
-"    color: black;\n"
-"}")
-        self.CarrinhoBT_2.setObjectName("CarrinhoBT_2")
         self.ComprarBT_3 = QtWidgets.QPushButton(parent=self.Barra1)
-        self.ComprarBT_3.setGeometry(QtCore.QRect(650, 480, 91, 31))
+        self.ComprarBT_3.setGeometry(QtCore.QRect(660, 480, 171, 31))
         self.ComprarBT_3.setStyleSheet("QPushButton {\n"
 "    background-color: #FFFFFF;\n"
 "    color: black;\n"
@@ -336,21 +357,6 @@ class Ui_MainWindow(object):
 "    color: white;\n"
 "}")
         self.ComprarBT_3.setObjectName("ComprarBT_3")
-        self.CarrinhoBT_3 = QtWidgets.QPushButton(parent=self.Barra1)
-        self.CarrinhoBT_3.setGeometry(QtCore.QRect(750, 480, 81, 31))
-        self.CarrinhoBT_3.setStyleSheet("QPushButton {\n"
-"    background-color: #000000;\n"
-"    color: white;\n"
-"    border: 2px solid #FFFFFF;\n"
-"    border-radius: 10px;\n"
-"    font-weight: bold;\n"
-"}\n"
-"\n"
-"QPushButton:hover {\n"
-"    background-color: #00FF00;\n"
-"    color: black;\n"
-"}")
-        self.CarrinhoBT_3.setObjectName("CarrinhoBT_3")
         self.Desconto = QtWidgets.QPushButton(parent=self.Barra1)
         self.Desconto.setGeometry(QtCore.QRect(190, 520, 41, 21))
         font = QtGui.QFont()
@@ -453,29 +459,46 @@ class Ui_MainWindow(object):
         self.statusbar.setObjectName("statusbar")
         MainWindow.setStatusBar(self.statusbar)
 
+        self.jogos = (
+            self.SELgta6, self.GTA6_2,
+            self.SELMspider, self.Mspider,
+            self.SELMinecraft, self.Minecraft,
+            self.BibliotecaBT, self.BibliotecaBT_2, self.BibliotecaBT_3,
+            self.ComprarBT, self.Preco, self.Desconto,
+            self.ComprarBT_2, self.Preco_2, self.Desconto_2,
+            self.ComprarBT_3, self.Preco_3, self.Desconto_3,
+        )
+        for widget in self.jogos:
+            widget.hide()
+        self.Pesquisar.clicked.connect(self.mostrar_jogos)
+
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
+
+    def mostrar_jogos(self):
+        self.BemVindo.hide()
+        for widget in self.jogos:
+            widget.show()
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
+        self.BemVindo.setText(_translate("MainWindow", "Bem vindo(a) a A.R.K.O!"))
         self.Store.setText(_translate("MainWindow", "Store"))
         self.Biblioteca.setText(_translate("MainWindow", "Biblioteca"))
         self.Conta.setText(_translate("MainWindow", "👤 HI!"))
         self.Amigos.setText(_translate("MainWindow", "👥 Amigos"))
         self.Carrinho.setText(_translate("MainWindow", "🛒 Carrinho"))
         self.Pesquisar.setText(_translate("MainWindow", "🎮 Pesquisar"))
-        self.ComprarBT.setText(_translate("MainWindow", "Comprar"))
-        self.CarrinhoBT.setText(_translate("MainWindow", "Carrinho"))
+        self.BibliotecaBT.setText(_translate("MainWindow", "Biblioteca"))
+        self.BibliotecaBT_2.setText(_translate("MainWindow", "Biblioteca"))
+        self.BibliotecaBT_3.setText(_translate("MainWindow", "Biblioteca"))
+        self.ComprarBT.setText(_translate("MainWindow", "Carrinho"))
         self.Preco.setText(_translate("MainWindow", "          R$449,00 →  R$ 314,30"))
-        self.ComprarBT_2.setText(_translate("MainWindow", "Comprar"))
-        self.CarrinhoBT_2.setText(_translate("MainWindow", "Carrinho"))
-        self.ComprarBT_3.setText(_translate("MainWindow", "Comprar"))
-        self.CarrinhoBT_3.setText(_translate("MainWindow", "Carrinho"))
+        self.ComprarBT_2.setText(_translate("MainWindow", "Carrinho"))
+        self.ComprarBT_3.setText(_translate("MainWindow", "Carrinho"))
         self.Desconto.setText(_translate("MainWindow", "-30%"))
         self.Preco_2.setText(_translate("MainWindow", "          R$ 249,90 →  R$ 87,40"))
         self.Desconto_2.setText(_translate("MainWindow", "-65%"))
         self.Preco_3.setText(_translate("MainWindow", "          R$ 99,00→  R$ R$ 59,40"))
         self.Desconto_3.setText(_translate("MainWindow", "-40%"))
-
-
