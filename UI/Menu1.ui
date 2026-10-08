@@ -295,17 +295,13 @@ QPushButton:hover {
        </property>
        <property name="styleSheet">
         <string notr="true">QPushButton {
-    background-color: #000000;
-    color: white;
-    border: 2px solid #FFFFFF;
+    background-color: #00FF00;
+    color: black;
+    border: 2px solid #00FF00;
     border-radius: 10px;
     font-weight: bold;
 }
-
-QPushButton:hover {
-    background-color: #00FF00;
-    color: black;
-}</string>
+</string>
        </property>
        <property name="text">
         <string>🎮 Pesquisar</string>
@@ -364,10 +360,10 @@ QPushButton:hover {
       <widget class="QLabel" name="GTA6_2">
        <property name="geometry">
         <rect>
-         <x>190</x>
-         <y>240</y>
-         <width>181</width>
-         <height>231</height>
+         <x>200</x>
+         <y>250</y>
+         <width>161</width>
+         <height>221</height>
         </rect>
        </property>
        <property name="text">
@@ -385,7 +381,7 @@ QPushButton:hover {
         <rect>
          <x>410</x>
          <y>230</y>
-         <width>181</width>
+         <width>201</width>
          <height>321</height>
         </rect>
        </property>
@@ -416,7 +412,7 @@ QPushButton:hover {
       <widget class="QLabel" name="Mspider">
        <property name="geometry">
         <rect>
-         <x>420</x>
+         <x>430</x>
          <y>250</y>
          <width>161</width>
          <height>221</height>
@@ -435,9 +431,9 @@ QPushButton:hover {
       <widget class="QPushButton" name="SELMinecraft">
        <property name="geometry">
         <rect>
-         <x>620</x>
+         <x>640</x>
          <y>230</y>
-         <width>181</width>
+         <width>201</width>
          <height>321</height>
         </rect>
        </property>
@@ -468,7 +464,7 @@ QPushButton:hover {
       <widget class="QLabel" name="Minecraft">
        <property name="geometry">
         <rect>
-         <x>630</x>
+         <x>660</x>
          <y>250</y>
          <width>161</width>
          <height>221</height>
@@ -489,7 +485,7 @@ QPushButton:hover {
         <rect>
          <x>190</x>
          <y>480</y>
-         <width>81</width>
+         <width>91</width>
          <height>31</height>
         </rect>
        </property>
@@ -571,7 +567,7 @@ QPushButton:hover {
         <rect>
          <x>420</x>
          <y>480</y>
-         <width>81</width>
+         <width>91</width>
          <height>31</height>
         </rect>
        </property>
@@ -595,9 +591,9 @@ QPushButton:hover {
       <widget class="QPushButton" name="CarrinhoBT_2">
        <property name="geometry">
         <rect>
-         <x>510</x>
+         <x>520</x>
          <y>480</y>
-         <width>71</width>
+         <width>81</width>
          <height>31</height>
         </rect>
        </property>
@@ -622,9 +618,9 @@ QPushButton:hover {
       <widget class="QPushButton" name="ComprarBT_3">
        <property name="geometry">
         <rect>
-         <x>630</x>
+         <x>650</x>
          <y>480</y>
-         <width>81</width>
+         <width>91</width>
          <height>31</height>
         </rect>
        </property>
@@ -648,9 +644,9 @@ QPushButton:hover {
       <widget class="QPushButton" name="CarrinhoBT_3">
        <property name="geometry">
         <rect>
-         <x>720</x>
+         <x>750</x>
          <y>480</y>
-         <width>71</width>
+         <width>81</width>
          <height>31</height>
         </rect>
        </property>
@@ -672,7 +668,7 @@ QPushButton:hover {
         <string>Carrinho</string>
        </property>
       </widget>
-      <widget class="QPushButton" name="Preco_2">
+      <widget class="QPushButton" name="Desconto">
        <property name="geometry">
         <rect>
          <x>190</x>
@@ -700,6 +696,124 @@ QPushButton:hover {
        </property>
        <property name="text">
         <string>-30%</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="Preco_2">
+       <property name="geometry">
+        <rect>
+         <x>430</x>
+         <y>520</y>
+         <width>171</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="font">
+        <font>
+         <weight>75</weight>
+         <bold>true</bold>
+         <strikeout>false</strikeout>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QPushButton {
+    background-color: #000000;
+    color: #00FF00;
+    border: 2px solid #00FF00;
+    border-radius: 10px;
+    font-weight: bold;
+}</string>
+       </property>
+       <property name="text">
+        <string>          R$ 249,90 →  R$ 87,40</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="Desconto_2">
+       <property name="geometry">
+        <rect>
+         <x>420</x>
+         <y>520</y>
+         <width>41</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>7</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
+         <strikeout>false</strikeout>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QPushButton {
+    background-color: #00FF00;
+    color: black;
+    border: 2px solid #00FF00;
+    border-radius: 10px;
+    font-weight: bold;
+}</string>
+       </property>
+       <property name="text">
+        <string>-65%</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="Preco_3">
+       <property name="geometry">
+        <rect>
+         <x>660</x>
+         <y>520</y>
+         <width>171</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="font">
+        <font>
+         <weight>75</weight>
+         <bold>true</bold>
+         <strikeout>false</strikeout>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QPushButton {
+    background-color: #000000;
+    color: #00FF00;
+    border: 2px solid #00FF00;
+    border-radius: 10px;
+    font-weight: bold;
+}</string>
+       </property>
+       <property name="text">
+        <string>          R$ 99,00→  R$ R$ 59,40</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="Desconto_3">
+       <property name="geometry">
+        <rect>
+         <x>650</x>
+         <y>520</y>
+         <width>41</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>7</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
+         <strikeout>false</strikeout>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QPushButton {
+    background-color: #00FF00;
+    color: black;
+    border: 2px solid #00FF00;
+    border-radius: 10px;
+    font-weight: bold;
+}</string>
+       </property>
+       <property name="text">
+        <string>-40%</string>
        </property>
       </widget>
      </widget>
