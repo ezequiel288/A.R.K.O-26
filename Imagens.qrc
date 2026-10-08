@@ -1,0 +1,11 @@
+<RCC>
+  <qresource prefix="Logo">
+    <file>imagens/WhatsApp Image 2026-10-01 at 15.10.22 (1).jpeg</file>
+  </qresource>
+  <qresource prefix="Minecraft">
+    <file alias="3cdc624293ae885a197906ba94b1475a.png">imagens/js.png</file>
+  </qresource>
+  <qresource prefix="Mspider">
+    <file>imagens/images (68).jpg</file>
+  </qresource>
+</RCC>

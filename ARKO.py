@@ -8,6 +8,15 @@
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 from PyQt6.QtGui import QPixmap
+from pathlib import Path
+
+
+def carregar_imagem(recurso, arquivo):
+        pixmap = QPixmap(recurso)
+        if pixmap.isNull():
+                caminho = Path(__file__).resolve().parent / "imagens" / arquivo
+                pixmap = QPixmap(str(caminho))
+        return pixmap
 
 
 class Ui_MainWindow(object):
@@ -96,7 +105,7 @@ class Ui_MainWindow(object):
         self.Logo.setGeometry(QtCore.QRect(40, 70, 61, 81))
         self.Logo.setAutoFillBackground(False)
         self.Logo.setText("")
-        self.Logo.setPixmap(QtGui.QPixmap(":/Logo/WhatsApp Image 2026-10-01 at 15.10.22 (1).jpeg"))
+        self.Logo.setPixmap(carregar_imagem(":/Logo/WhatsApp Image 2026-10-01 at 15.10.22 (1).jpeg", "WhatsApp Image 2026-10-01 at 15.10.22 (1).jpeg"))
         self.Logo.setScaledContents(True)
         self.Logo.setObjectName("Logo")
         self.Conta = QtWidgets.QPushButton(parent=self.Barra1)
@@ -189,7 +198,7 @@ class Ui_MainWindow(object):
         self.GTA6_2 = QtWidgets.QLabel(parent=self.Barra1)
         self.GTA6_2.setGeometry(QtCore.QRect(200, 250, 161, 221))
         self.GTA6_2.setText("")
-        self.GTA6_2.setPixmap(QtGui.QPixmap(":/GTA6/images.jfif"))
+        self.GTA6_2.setPixmap(carregar_imagem(":/GTA6/images.jfif", "images.jfif"))
         self.GTA6_2.setScaledContents(True)
         self.GTA6_2.setObjectName("GTA6_2")
         self.SELMspider = QtWidgets.QPushButton(parent=self.Barra1)
@@ -213,7 +222,7 @@ class Ui_MainWindow(object):
         self.Mspider = QtWidgets.QLabel(parent=self.Barra1)
         self.Mspider.setGeometry(QtCore.QRect(430, 250, 161, 221))
         self.Mspider.setText("")
-        self.Mspider.setPixmap(QtGui.QPixmap(":/Mspider/images (68).jpg"))
+        self.Mspider.setPixmap(carregar_imagem(":/Mspider/images (68).jpg", "images (68).jpg"))
         self.Mspider.setScaledContents(True)
         self.Mspider.setObjectName("Mspider")
         self.SELMinecraft = QtWidgets.QPushButton(parent=self.Barra1)
@@ -237,7 +246,7 @@ class Ui_MainWindow(object):
         self.Minecraft = QtWidgets.QLabel(parent=self.Barra1)
         self.Minecraft.setGeometry(QtCore.QRect(660, 250, 161, 221))
         self.Minecraft.setText("")
-        self.Minecraft.setPixmap(QtGui.QPixmap(":/Minecraft/3cdc624293ae885a197906ba94b1475a.png"))
+        self.Minecraft.setPixmap(carregar_imagem(":/Minecraft/3cdc624293ae885a197906ba94b1475a.png", "js.png"))
         self.Minecraft.setScaledContents(True)
         self.Minecraft.setObjectName("Minecraft")
         self.ComprarBT = QtWidgets.QPushButton(parent=self.Barra1)
