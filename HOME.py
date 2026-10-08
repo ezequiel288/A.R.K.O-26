@@ -7,7 +7,6 @@ from usuario import *
 from jogo import *
 from biblioteca import *
 from amigo import *
-from jogobiblioteca import *
 from carrinho import *
 from transacao import *
 from avaliacao import *
@@ -451,51 +450,6 @@ def menu_transacoes():
         else:
             print("Opção inválida.")
 
-def menu_jogosbiblioteca():
-    limpar_tela()
-    while True:
-        print("\n" + "="*40)
-        print("           MENU TRANSAÇÕES")
-        print("="*40)
-        print("1 - Cadastrar Transação")
-        print("2 - Alterar Transação")
-        print("3 - Listar Transações")
-        print("0 - Voltar")
-
-        opcao = input("Escolha uma opção: ")
-
-        if opcao == "1":
-            jogosbiblioteca = JogoBiblioteca.cadastrar()
-            jogosbiblioteca.append(jogosbiblioteca)
-            print("Jogo adicionado a Biblioteca com sucesso.")
-
-        elif opcao == "2":
-            if len(jogosbiblioteca) > 0:
-                for i, jogosbiblioteca in enumerate(jogosbiblioteca):
-                    print(i, "-", jogosbiblioteca)
-
-                escolha = int(input("Escolha o Jogo na Biblioteca: "))
-                jogosbiblioteca[escolha].alterar()
-
-            else:
-                print("Nenhum Jogo adicionado na Biblioteca.")
-
-        elif opcao == "3":
-            print("Entrou na opção 3")
-            print("Quantidade de Jogos na Biblioteca:", len(jogosbiblioteca))
-
-            for jogosbiblioteca in jogosbiblioteca:
-                print(jogosbiblioteca)
-
-            input("\nPressione ENTER para voltar...")
-
-        elif opcao == "0":
-            limpar_tela()
-            break
-
-        else:
-            print("Opção inválida.")
-
 
 def limpar_tela():
 # Verifica o sistema operacional ('nt' é o Windows)
@@ -524,7 +478,6 @@ def main():
         print("5 - Avaliações")
         print("6 - Amigos")
         print("7 - Transações")
-        print("8 - Jogos na Biblioteca")
         print("0 - Sair")
 
         opcao = input("Escolha uma opção: ")
@@ -548,10 +501,7 @@ def main():
             menu_amigos()
 
         elif opcao == "7":
-            menu_transacoes()
-
-        elif opcao == "8":
-            menu_jogosbiblioteca()        
+            menu_transacoes()     
 
         elif opcao == "0":
             limpar_tela()
