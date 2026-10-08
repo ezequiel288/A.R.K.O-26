@@ -185,7 +185,7 @@ QPushButton:hover {
         <string/>
        </property>
        <property name="pixmap">
-        <pixmap resource="Imagens.qrc">:/Logo/WhatsApp Image 2026-10-01 at 15.10.22 (1).jpeg</pixmap>
+        <pixmap resource="Imagens.qrc">:/Logo/imagens/WhatsApp Image 2026-10-01 at 15.10.22 (1).jpeg</pixmap>
        </property>
        <property name="scaledContents">
         <bool>true</bool>
@@ -370,7 +370,7 @@ QPushButton:hover {
         <string/>
        </property>
        <property name="pixmap">
-        <pixmap resource="GTA6.qrc">:/GTA6/images.jfif</pixmap>
+        <pixmap resource="GTA6.qrc">:/GTA6/imagens/images.jfif</pixmap>
        </property>
        <property name="scaledContents">
         <bool>true</bool>
@@ -422,7 +422,7 @@ QPushButton:hover {
         <string/>
        </property>
        <property name="pixmap">
-        <pixmap resource="Imagens.qrc">:/Mspider/images (68).jpg</pixmap>
+        <pixmap resource="Imagens.qrc">:/Mspider/imagens/images (68).jpg</pixmap>
        </property>
        <property name="scaledContents">
         <bool>true</bool>
@@ -485,7 +485,7 @@ QPushButton:hover {
         <rect>
          <x>190</x>
          <y>480</y>
-         <width>91</width>
+         <width>181</width>
          <height>31</height>
         </rect>
        </property>
@@ -504,33 +504,6 @@ QPushButton:hover {
        </property>
        <property name="text">
         <string>Comprar</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="CarrinhoBT">
-       <property name="geometry">
-        <rect>
-         <x>290</x>
-         <y>480</y>
-         <width>81</width>
-         <height>31</height>
-        </rect>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">QPushButton {
-    background-color: #000000;
-    color: white;
-    border: 2px solid #FFFFFF;
-    border-radius: 10px;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #00FF00;
-    color: black;
-}</string>
-       </property>
-       <property name="text">
-        <string>Carrinho</string>
        </property>
       </widget>
       <widget class="QPushButton" name="Preco">
@@ -567,7 +540,7 @@ QPushButton:hover {
         <rect>
          <x>420</x>
          <y>480</y>
-         <width>91</width>
+         <width>181</width>
          <height>31</height>
         </rect>
        </property>
@@ -586,33 +559,6 @@ QPushButton:hover {
        </property>
        <property name="text">
         <string>Comprar</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="CarrinhoBT_2">
-       <property name="geometry">
-        <rect>
-         <x>520</x>
-         <y>480</y>
-         <width>81</width>
-         <height>31</height>
-        </rect>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">QPushButton {
-    background-color: #000000;
-    color: white;
-    border: 2px solid #FFFFFF;
-    border-radius: 10px;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #00FF00;
-    color: black;
-}</string>
-       </property>
-       <property name="text">
-        <string>Carrinho</string>
        </property>
       </widget>
       <widget class="QPushButton" name="ComprarBT_3">
@@ -620,7 +566,7 @@ QPushButton:hover {
         <rect>
          <x>650</x>
          <y>480</y>
-         <width>91</width>
+         <width>181</width>
          <height>31</height>
         </rect>
        </property>
@@ -639,33 +585,6 @@ QPushButton:hover {
        </property>
        <property name="text">
         <string>Comprar</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="CarrinhoBT_3">
-       <property name="geometry">
-        <rect>
-         <x>750</x>
-         <y>480</y>
-         <width>81</width>
-         <height>31</height>
-        </rect>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">QPushButton {
-    background-color: #000000;
-    color: white;
-    border: 2px solid #FFFFFF;
-    border-radius: 10px;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #00FF00;
-    color: black;
-}</string>
-       </property>
-       <property name="text">
-        <string>Carrinho</string>
        </property>
       </widget>
       <widget class="QPushButton" name="Desconto">
@@ -783,7 +702,7 @@ QPushButton:hover {
 }</string>
        </property>
        <property name="text">
-        <string>          R$ 99,00→  R$ R$ 59,40</string>
+        <string>          R$ 99,00 →  R$ 59,40</string>
        </property>
       </widget>
       <widget class="QPushButton" name="Desconto_3">
@@ -828,7 +747,7 @@ QPushButton:hover {
       </property>
       <property name="styleSheet">
        <string notr="true">QScrollBar:vertical {
-    background: #FOFOFO;
+    background: #F0F0F0;
     width: 10px;
 }
 
