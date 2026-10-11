@@ -1,4 +1,5 @@
 # Form implementation generated from reading ui file 'Menu1.ui'
+
 #
 # Created by: PyQt6 UI code generator 6.11.0
 #
@@ -158,6 +159,19 @@ class Ui_MainWindow(object):
 "    color: black;\n"
 "}")
         self.Carrinho.setObjectName("Carrinho")
+        self.ContadorCarrinho = QtWidgets.QLabel(parent=self.Barra1)
+        self.ContadorCarrinho.setGeometry(QtCore.QRect(1110, 108, 25, 25))
+        self.ContadorCarrinho.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.ContadorCarrinho.setStyleSheet("QLabel {\n"
+"    background-color: #00FF00;\n"
+"    color: black;\n"
+"    border: 1px solid #FFFFFF;\n"
+"    border-radius: 12px;\n"
+"    font-weight: bold;\n"
+"}")
+        self.ContadorCarrinho.setObjectName("ContadorCarrinho")
+        self.ContadorCarrinho.setText("0")
+        self.ContadorCarrinho.hide()
         self.Pesquisar = QtWidgets.QPushButton(parent=self.Barra1)
         self.Pesquisar.setGeometry(QtCore.QRect(260, 120, 591, 31))
         self.Pesquisar.setStyleSheet("QPushButton {\n"
@@ -449,6 +463,21 @@ class Ui_MainWindow(object):
 "")
         self.Scroll1.setOrientation(QtCore.Qt.Orientation.Vertical)
         self.Scroll1.setObjectName("Scroll1")
+        self.ComprarCarrinho = QtWidgets.QPushButton(parent=self.Barra1)
+        self.ComprarCarrinho.setGeometry(QtCore.QRect(630, 700, 220, 45))
+        self.ComprarCarrinho.setStyleSheet("QPushButton {\n"
+"    background-color: #00FF00;\n"
+"    color: black;\n"
+"    border: 2px solid #00FF00;\n"
+"    border-radius: 10px;\n"
+"    font-weight: bold;\n"
+"}\n"
+"QPushButton:hover {\n"
+"    background-color: #FFFFFF;\n"
+"    border-color: #FFFFFF;\n"
+"}")
+        self.ComprarCarrinho.setObjectName("ComprarCarrinho")
+        self.ComprarCarrinho.hide()
         self.scrollArea.setWidget(self.scrollAreaWidgetContents)
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(parent=MainWindow)
@@ -489,14 +518,15 @@ class Ui_MainWindow(object):
         self.Conta.setText(_translate("MainWindow", "👤 HI!"))
         self.Amigos.setText(_translate("MainWindow", "👥 Amigos"))
         self.Carrinho.setText(_translate("MainWindow", "🛒 Carrinho"))
+        self.ComprarCarrinho.setText(_translate("MainWindow", "Comprar"))
         self.Pesquisar.setText(_translate("MainWindow", "🎮 Pesquisar"))
         self.BibliotecaBT.setText(_translate("MainWindow", "Biblioteca"))
         self.BibliotecaBT_2.setText(_translate("MainWindow", "Biblioteca"))
         self.BibliotecaBT_3.setText(_translate("MainWindow", "Biblioteca"))
-        self.ComprarBT.setText(_translate("MainWindow", "Carrinho"))
+        self.ComprarBT.setText(_translate("MainWindow", "Adicionar ao carrinho"))
         self.Preco.setText(_translate("MainWindow", "          R$449,00 →  R$ 314,30"))
-        self.ComprarBT_2.setText(_translate("MainWindow", "Carrinho"))
-        self.ComprarBT_3.setText(_translate("MainWindow", "Carrinho"))
+        self.ComprarBT_2.setText(_translate("MainWindow", "Adicionar ao carrinho"))
+        self.ComprarBT_3.setText(_translate("MainWindow", "Adicionar ao carrinho"))
         self.Desconto.setText(_translate("MainWindow", "-30%"))
         self.Preco_2.setText(_translate("MainWindow", "          R$ 249,90 →  R$ 87,40"))
         self.Desconto_2.setText(_translate("MainWindow", "-65%"))

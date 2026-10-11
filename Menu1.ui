@@ -503,7 +503,7 @@ QPushButton:hover {
 }</string>
        </property>
        <property name="text">
-        <string>Comprar</string>
+         <string>Adicionar ao carrinho</string>
        </property>
       </widget>
       <widget class="QPushButton" name="Preco">
@@ -558,7 +558,7 @@ QPushButton:hover {
 }</string>
        </property>
        <property name="text">
-        <string>Comprar</string>
+         <string>Adicionar ao carrinho</string>
        </property>
       </widget>
       <widget class="QPushButton" name="ComprarBT_3">
@@ -584,7 +584,7 @@ QPushButton:hover {
 }</string>
        </property>
        <property name="text">
-        <string>Comprar</string>
+         <string>Adicionar ao carrinho</string>
        </property>
       </widget>
       <widget class="QPushButton" name="Desconto">
@@ -733,6 +733,35 @@ QPushButton:hover {
        </property>
        <property name="text">
         <string>-40%</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="ComprarCarrinho">
+       <property name="geometry">
+        <rect>
+         <x>630</x>
+         <y>700</y>
+         <width>220</width>
+         <height>45</height>
+        </rect>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">QPushButton {
+    background-color: #00FF00;
+    color: black;
+    border: 2px solid #00FF00;
+    border-radius: 10px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #FFFFFF;
+    border-color: #FFFFFF;
+}</string>
+       </property>
+       <property name="text">
+        <string>Comprar</string>
+       </property>
+       <property name="visible">
+        <bool>false</bool>
        </property>
       </widget>
      </widget>
