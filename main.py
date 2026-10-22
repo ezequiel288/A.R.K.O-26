@@ -93,9 +93,30 @@ class MainWindow(QMainWindow):
                 self.ui.Desconto_3,
             ),
         )
+        self._store_game_titles = []
+        for index, card in enumerate(self._game_cards):
+            image = card[1]
+            image.setGeometry(
+                image.x(), image.y(), image.width(), image.height() - 31
+            )
+            title = QLabel(self.BUILTIN_GAMES[index]["titulo"], self.ui.Barra1)
+            title.setGeometry(card[0].x() + 10, 444, 181, 30)
+            title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            title.setToolTip(self.BUILTIN_GAMES[index]["titulo"])
+            title.setStyleSheet(
+                "QLabel { background-color: transparent; color: white; "
+                "font-weight: bold; }"
+            )
+            title.hide()
+            self._store_game_titles.append(title)
+        self._game_cards = tuple(
+            card + (title,)
+            for card, title in zip(self._game_cards, self._store_game_titles)
+        )
         self._cart_games = set()
         self._library_games = set()
         self._load_transactions()
+        self._load_reviews()
         self._load_custom_games()
         self._setup_library_page()
         for index, card in enumerate(self._game_cards):
@@ -126,6 +147,9 @@ class MainWindow(QMainWindow):
         self._base_fonts = {
             widget: widget.font() for widget in self._base_geometries
         }
+        for title in self._store_game_titles:
+            self._base_geometries[title] = title.geometry()
+            self._base_fonts[title] = title.font()
         self.setWindowState(Qt.WindowState.WindowMaximized)
 
     def _show_page(self, page):
@@ -135,6 +159,8 @@ class MainWindow(QMainWindow):
         self._library_panel.hide()
         for widget in self.ui.jogos:
             widget.hide()
+        for title in self._store_game_titles:
+            title.hide()
         self.ui.ComprarCarrinho.hide()
 
         if page == "welcome":
@@ -263,6 +289,49 @@ class MainWindow(QMainWindow):
         registration_layout.addStretch()
         self._account_tabs.addTab(registration_tab, "Cadastro")
 
+        login_tab = QWidget()
+        login_layout = QVBoxLayout(login_tab)
+        login_layout.addStretch()
+        login_card_row = QHBoxLayout()
+        login_card_row.addStretch()
+        login_card = QFrame()
+        login_card.setObjectName("RegistrationCard")
+        login_card.setMaximumWidth(520)
+        login_card.setStyleSheet(card.styleSheet())
+        login_card_layout = QVBoxLayout(login_card)
+
+        login_title = QLabel("Entrar na conta")
+        login_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        login_title.setStyleSheet("font-size: 22px; font-weight: bold;")
+        login_card_layout.addWidget(login_title)
+
+        login_form = QFormLayout()
+        self._login_email = QLineEdit()
+        self._login_email.setPlaceholderText("voce@exemplo.com")
+        self._login_password = QLineEdit()
+        self._login_password.setPlaceholderText("Sua senha")
+        self._login_password.setEchoMode(QLineEdit.EchoMode.Password)
+        login_form.addRow("E-mail:", self._login_email)
+        login_form.addRow("Senha:", self._login_password)
+        login_card_layout.addLayout(login_form)
+
+        self._login_status = QLabel("")
+        self._login_status.setWordWrap(True)
+        self._login_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        login_card_layout.addWidget(self._login_status)
+
+        login_button = QPushButton("Entrar")
+        login_button.setDefault(True)
+        login_button.clicked.connect(self.login_user)
+        self._login_password.returnPressed.connect(self.login_user)
+        login_card_layout.addWidget(login_button)
+
+        login_card_row.addWidget(login_card)
+        login_card_row.addStretch()
+        login_layout.addLayout(login_card_row)
+        login_layout.addStretch()
+        self._account_tabs.addTab(login_tab, "Entrar")
+
         account_tab = QWidget()
         account_layout = QVBoxLayout(account_tab)
         account_layout.setContentsMargins(24, 24, 24, 24)
@@ -318,7 +387,7 @@ class MainWindow(QMainWindow):
         account_layout.addStretch()
         self._account_edit_panel.hide()
         self._account_tabs.addTab(account_tab, "Minha conta")
-        self._account_tabs.setTabVisible(1, False)
+        self._account_tabs.setTabVisible(2, False)
         self._account_tabs.hide()
 
     def _setup_friends_page(self):
@@ -521,6 +590,125 @@ class MainWindow(QMainWindow):
         self._transactions = updated_transactions
         return True
 
+    def _load_reviews(self):
+        self._reviews_file = (
+            Path(__file__).resolve().parent / "dados" / "avaliacoes.json"
+        )
+        self._reviews = []
+        self._reviews_load_error = False
+        if not self._reviews_file.exists():
+            return
+
+        try:
+            with self._reviews_file.open("r", encoding="utf-8") as file:
+                reviews = json.load(file)
+            if not isinstance(reviews, list) or any(
+                not isinstance(review, dict)
+                or not {"usuario", "jogo_id", "nota", "data"}.issubset(review)
+                or not isinstance(review["usuario"], str)
+                or not isinstance(review["jogo_id"], str)
+                or type(review["nota"]) is not int
+                or not 1 <= review["nota"] <= 5
+                or not isinstance(review["data"], str)
+                for review in reviews
+            ):
+                raise ValueError("O arquivo de avaliações possui um formato inválido.")
+            self._reviews = reviews
+        except (OSError, json.JSONDecodeError, UnicodeError, ValueError) as error:
+            self._reviews_load_error = True
+            QMessageBox.critical(
+                self,
+                "Erro ao carregar avaliações",
+                f"Não foi possível carregar as avaliações salvas: {error}",
+            )
+
+    def _save_reviews(self, reviews):
+        if self._reviews_load_error:
+            QMessageBox.critical(
+                self,
+                "Avaliação indisponível",
+                "Corrija o arquivo dados/avaliacoes.json antes de continuar.",
+            )
+            return False
+
+        temporary_file = self._reviews_file.with_suffix(".json.tmp")
+        try:
+            self._reviews_file.parent.mkdir(parents=True, exist_ok=True)
+            with temporary_file.open("w", encoding="utf-8") as file:
+                json.dump(reviews, file, ensure_ascii=False, indent=2)
+            temporary_file.replace(self._reviews_file)
+        except (OSError, TypeError, ValueError) as error:
+            try:
+                temporary_file.unlink(missing_ok=True)
+            except OSError as cleanup_error:
+                error = OSError(
+                    f"{error}; falha ao remover arquivo temporário: {cleanup_error}"
+                )
+            QMessageBox.critical(
+                self,
+                "Erro ao salvar avaliação",
+                f"Não foi possível salvar a avaliação: {error}",
+            )
+            return False
+
+        self._reviews = reviews
+        return True
+
+    def _active_purchase_for_game(self, user_email, game_index):
+        game_id = str(game_index)
+        refunded_purchases = {
+            (transaction.get("compra_id"), item.get("id"))
+            for transaction in self._transactions
+            if transaction["tipo"] == "reembolso"
+            for item in transaction["jogos"]
+        }
+        return next(
+            (
+                transaction
+                for transaction in reversed(self._transactions)
+                if transaction["tipo"] == "compra"
+                and transaction["usuario"].casefold() == user_email.casefold()
+                and any(item["id"] == game_id for item in transaction["jogos"])
+                and (transaction["id"], game_id) not in refunded_purchases
+            ),
+            None,
+        )
+
+    def _load_user_library(self, user_email):
+        game_ids = set()
+        refunded_purchases = {
+            (transaction.get("compra_id"), item.get("id"))
+            for transaction in self._transactions
+            if transaction["tipo"] == "reembolso"
+            for item in transaction["jogos"]
+        }
+        for transaction in self._transactions:
+            if (
+                transaction["tipo"] != "compra"
+                or transaction["usuario"].casefold() != user_email.casefold()
+            ):
+                continue
+            for game in transaction["jogos"]:
+                if (transaction["id"], game["id"]) not in refunded_purchases:
+                    try:
+                        game_index = int(game["id"])
+                    except ValueError:
+                        continue
+                    if 0 <= game_index < len(self.BUILTIN_GAMES):
+                        game_ids.add(game_index)
+        self._library_games = game_ids
+
+    def _get_user_review(self, user_email, game_index):
+        return next(
+            (
+                review
+                for review in self._reviews
+                if review["usuario"].casefold() == user_email.casefold()
+                and review["jogo_id"] == str(game_index)
+            ),
+            None,
+        )
+
     def _load_custom_games(self):
         self._custom_games_file = Path(__file__).resolve().parent / "dados" / "jogos.json"
         self._custom_games = []
@@ -599,9 +787,12 @@ class MainWindow(QMainWindow):
         edit_callback=None,
         delete_callback=None,
         action_label="Apagar",
+        review_rating=None,
+        review_callback=None,
+        remove_review_callback=None,
     ):
         card = QFrame()
-        card.setFixedSize(201, 370)
+        card.setFixedSize(201, 420 if review_callback is not None else 370)
         card.setToolTip(
             f"{title}\n{description}\nEmpresa: {company}\n"
             f"Preço: R$ {price:.2f}".replace(".", ",")
@@ -667,6 +858,21 @@ class MainWindow(QMainWindow):
         )
         layout.addWidget(price_label)
 
+        if review_callback is not None:
+            review_label = QLabel(
+                "Sua avaliação: "
+                + (
+                    f"{'★' * review_rating}{'☆' * (5 - review_rating)} "
+                    f"({review_rating}/5)"
+                    if review_rating is not None
+                    else "Ainda não avaliado"
+                )
+            )
+            review_label.setFixedHeight(20)
+            review_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            review_label.setStyleSheet("color: #FFD700; font-weight: bold;")
+            layout.addWidget(review_label)
+
         actions = QHBoxLayout()
         if edit_callback is not None:
             edit_button = QPushButton("Alterar")
@@ -695,6 +901,36 @@ class MainWindow(QMainWindow):
         if actions.count():
             layout.addLayout(actions)
 
+        if review_callback is not None:
+            review_actions = QHBoxLayout()
+            review_button = QPushButton(
+                "Alterar avaliação" if review_rating is not None else "Avaliar"
+            )
+            review_button.setToolTip("Avaliar este jogo de 1 a 5 estrelas")
+            review_button.setFixedHeight(29)
+            review_button.setStyleSheet(
+                "QPushButton { background-color: #00FF00; color: black; "
+                "border: 2px solid #00FF00; border-radius: 8px; "
+                "font-weight: bold; }"
+            )
+            review_button.clicked.connect(review_callback)
+            review_actions.addWidget(review_button)
+
+            if remove_review_callback is not None and review_rating is not None:
+                remove_review_button = QPushButton("Remover")
+                remove_review_button.setToolTip("Remover sua avaliação")
+                remove_review_button.setFixedHeight(29)
+                remove_review_button.setStyleSheet(
+                    "QPushButton { background-color: #000000; color: #FFFFFF; "
+                    "border: 1px solid #FFFFFF; border-radius: 6px; "
+                    "font-weight: bold; }"
+                    "QPushButton:hover { background-color: #808080; color: black; }"
+                )
+                remove_review_button.clicked.connect(remove_review_callback)
+                review_actions.addWidget(remove_review_button)
+
+            layout.addLayout(review_actions)
+
         return card
 
     def _refresh_library(self):
@@ -708,6 +944,24 @@ class MainWindow(QMainWindow):
         for index in sorted(self._library_games):
             game = self.BUILTIN_GAMES[index]
             cover = self._game_cards[index][1].pixmap()
+            active_purchase = (
+                self._active_purchase_for_game(self._current_user_email, index)
+                if self._current_user_email is not None
+                else None
+            )
+            user_review = (
+                self._get_user_review(self._current_user_email, index)
+                if active_purchase is not None
+                else None
+            )
+            review_callback = (
+                lambda checked=False, game_index=index: self.rate_builtin_game(game_index)
+            )
+            remove_review_callback = (
+                lambda checked=False, game_index=index: self.remove_builtin_review(
+                    game_index
+                )
+            )
             cards.append(
                 self._create_library_card(
                     game["titulo"],
@@ -720,6 +974,9 @@ class MainWindow(QMainWindow):
                         game_index
                     ),
                     "Emitir reembolso",
+                    user_review["nota"] if user_review is not None else None,
+                    review_callback if active_purchase is not None else None,
+                    remove_review_callback if user_review is not None else None,
                 )
             )
 
@@ -1011,6 +1268,100 @@ class MainWindow(QMainWindow):
             builtin_index=game_index,
         )
 
+    def rate_builtin_game(self, game_index):
+        if self._current_user_email is None:
+            QMessageBox.information(
+                self,
+                "Conta necessária",
+                "Entre em uma conta para avaliar este jogo.",
+            )
+            return
+        if self._active_purchase_for_game(self._current_user_email, game_index) is None:
+            QMessageBox.warning(
+                self,
+                "Avaliação indisponível",
+                "Só é possível avaliar um jogo comprado e não reembolsado.",
+            )
+            return
+
+        existing_review = self._get_user_review(self._current_user_email, game_index)
+        rating, accepted = QInputDialog.getInt(
+            self,
+            "Avaliar jogo",
+            "Escolha uma nota de 1 a 5 estrelas:",
+            existing_review["nota"] if existing_review is not None else 5,
+            1,
+            5,
+        )
+        if not accepted:
+            return
+
+        updated_reviews = [
+            review
+            for review in self._reviews
+            if not (
+                review["usuario"].casefold() == self._current_user_email.casefold()
+                and review["jogo_id"] == str(game_index)
+            )
+        ]
+        updated_reviews.append(
+            {
+                "usuario": self._current_user_email,
+                "jogo_id": str(game_index),
+                "nota": rating,
+                "data": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        if self._save_reviews(updated_reviews):
+            self._refresh_library()
+
+    def remove_builtin_review(self, game_index):
+        if self._current_user_email is None:
+            QMessageBox.information(
+                self,
+                "Conta necessária",
+                "Entre em uma conta para remover sua avaliação.",
+            )
+            return
+        if self._active_purchase_for_game(self._current_user_email, game_index) is None:
+            QMessageBox.warning(
+                self,
+                "Avaliação indisponível",
+                "Só é possível alterar a avaliação de um jogo comprado e não reembolsado.",
+            )
+            return
+
+        existing_review = self._get_user_review(self._current_user_email, game_index)
+        if existing_review is None:
+            QMessageBox.information(
+                self,
+                "Avaliação não encontrada",
+                "Você ainda não avaliou este jogo.",
+            )
+            return
+
+        confirmation = QMessageBox.question(
+            self,
+            "Remover avaliação",
+            f"Deseja remover sua avaliação de "
+            f"“{self.BUILTIN_GAMES[game_index]['titulo']}”?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirmation != QMessageBox.StandardButton.Yes:
+            return
+
+        updated_reviews = [
+            review
+            for review in self._reviews
+            if not (
+                review["usuario"].casefold() == self._current_user_email.casefold()
+                and review["jogo_id"] == str(game_index)
+            )
+        ]
+        if self._save_reviews(updated_reviews):
+            self._refresh_library()
+
     def refund_builtin_game(self, game_index):
         if self._current_user_email is None:
             QMessageBox.information(
@@ -1215,9 +1566,10 @@ class MainWindow(QMainWindow):
 
     def show_registration(self):
         self._account_tabs.setTabVisible(0, self._current_user_email is None)
-        self._account_tabs.setTabVisible(1, self._current_user_email is not None)
+        self._account_tabs.setTabVisible(1, self._current_user_email is None)
+        self._account_tabs.setTabVisible(2, self._current_user_email is not None)
         self._account_tabs.setCurrentIndex(
-            1 if self._current_user_email is not None else 0
+            2 if self._current_user_email is not None else 0
         )
         self._show_page("registration")
 
@@ -1227,6 +1579,158 @@ class MainWindow(QMainWindow):
     def show_account_edit(self):
         self._account_status.clear()
         self._account_edit_panel.show()
+
+    def _activate_account(self, email, name):
+        self._current_user_email = email
+        self._load_user_library(email)
+        self.ui.Conta.setText(f"👤 {name}")
+        self._account_welcome.setText(f"Bem-vindo: {name}")
+        self._account_name.setText(name)
+        self._account_email.setText(email)
+        self._account_password.clear()
+        self._account_edit_panel.hide()
+        self._login_email.clear()
+        self._login_password.clear()
+        self.show_registration()
+
+    def _verify_password(self, password, stored_password):
+        if stored_password.startswith("pbkdf2_sha256$"):
+            try:
+                algorithm, iterations_text, salt_hex, expected_hash = (
+                    stored_password.split("$")
+                )
+                iterations = int(iterations_text)
+                if algorithm != "pbkdf2_sha256" or not 1 <= iterations <= 10_000_000:
+                    return False, False
+                if (
+                    not salt_hex
+                    or len(expected_hash) != 64
+                    or not expected_hash.isascii()
+                    or any(character not in "0123456789abcdefABCDEF" for character in expected_hash)
+                ):
+                    return False, False
+                salt = bytes.fromhex(salt_hex)
+                actual_hash = hashlib.pbkdf2_hmac(
+                    "sha256",
+                    password.encode("utf-8"),
+                    salt,
+                    iterations,
+                ).hex()
+            except (ValueError, OverflowError):
+                return False, False
+            return secrets.compare_digest(actual_hash, expected_hash), False
+
+        matches_legacy_password = secrets.compare_digest(
+            password.encode("utf-8"),
+            stored_password.encode("utf-8"),
+        )
+        return matches_legacy_password, matches_legacy_password
+
+    def _upgrade_legacy_password(self, email, new_password_hash):
+        users_file = Path(__file__).resolve().parent / "dados" / "usuario.csv"
+        temporary_file = users_file.with_suffix(".csv.tmp")
+        try:
+            with users_file.open("r", newline="", encoding="utf-8") as file:
+                rows = list(csv.reader(file))
+            if not rows or not {"nome", "senha", "email"}.issubset(rows[0]):
+                raise ValueError("O arquivo de contas possui um cabeçalho inválido.")
+
+            fieldnames = rows[0]
+            password_index = fieldnames.index("senha")
+            email_index = fieldnames.index("email")
+            account = next(
+                (
+                    row
+                    for row in rows[1:]
+                    if len(row) > email_index
+                    and row[email_index].strip().casefold() == email.casefold()
+                ),
+                None,
+            )
+            if account is None or len(account) <= password_index:
+                raise ValueError("Não foi possível localizar a conta para atualizar a senha.")
+            account[password_index] = new_password_hash
+
+            with temporary_file.open("w", newline="", encoding="utf-8") as file:
+                writer = csv.writer(file)
+                writer.writerows(rows)
+            temporary_file.replace(users_file)
+        except (OSError, csv.Error, UnicodeError, ValueError) as error:
+            try:
+                temporary_file.unlink(missing_ok=True)
+            except OSError as cleanup_error:
+                error = OSError(f"{error}; falha ao limpar arquivo temporário: {cleanup_error}")
+            QMessageBox.critical(
+                self,
+                "Erro ao atualizar senha",
+                f"A senha antiga foi aceita, mas não foi possível protegê-la: {error}",
+            )
+            return False
+        return True
+
+    def login_user(self):
+        email = self._login_email.text().strip()
+        password = self._login_password.text()
+        if not email or not password:
+            self._login_status.setStyleSheet("color: #FF7777;")
+            self._login_status.setText("Digite seu e-mail e sua senha.")
+            return
+
+        users_file = Path(__file__).resolve().parent / "dados" / "usuario.csv"
+        try:
+            with users_file.open("r", newline="", encoding="utf-8") as file:
+                reader = csv.DictReader(file)
+                if not reader.fieldnames or not {"nome", "senha", "email"}.issubset(
+                    reader.fieldnames
+                ):
+                    raise ValueError("O arquivo de contas possui um cabeçalho inválido.")
+                account = next(
+                    (
+                        row
+                        for row in reader
+                        if str(row.get("email") or "").strip().casefold()
+                        == email.casefold()
+                    ),
+                    None,
+                )
+        except FileNotFoundError:
+            self._login_status.setStyleSheet("color: #FF7777;")
+            self._login_status.setText("Nenhuma conta cadastrada foi encontrada.")
+            return
+        except (OSError, csv.Error, UnicodeError, ValueError) as error:
+            QMessageBox.critical(
+                self,
+                "Erro ao entrar",
+                f"Não foi possível ler as contas salvas: {error}",
+            )
+            return
+
+        if (
+            account is None
+            or not account.get("senha")
+            or not str(account.get("nome") or "").strip()
+        ):
+            self._login_status.setStyleSheet("color: #FF7777;")
+            self._login_status.setText("E-mail ou senha incorretos.")
+            return
+
+        password_matches, needs_upgrade = self._verify_password(
+            password, account["senha"]
+        )
+        if not password_matches:
+            self._login_status.setStyleSheet("color: #FF7777;")
+            self._login_status.setText("E-mail ou senha incorretos.")
+            return
+
+        account_email = str(account.get("email") or "").strip()
+        if needs_upgrade and not self._upgrade_legacy_password(
+            account_email, self._hash_password(password)
+        ):
+            return
+
+        self._login_status.setStyleSheet("color: #00FF00;")
+        self._login_status.setText("Login realizado com sucesso.")
+        self._activate_account(account_email, str(account["nome"]).strip())
 
     def _hash_password(self, password):
         salt = secrets.token_bytes(16)
@@ -1302,14 +1806,7 @@ class MainWindow(QMainWindow):
         self._registration_password.clear()
         self._registration_status.setStyleSheet("color: #00FF00;")
         self._registration_status.setText("Cadastro realizado com sucesso!")
-        self._current_user_email = email
-        self.ui.Conta.setText(f"👤 {name}")
-        self._account_welcome.setText(f"Bem-vindo: {name}")
-        self._account_name.setText(name)
-        self._account_email.setText(email)
-        self._account_password.clear()
-        self._account_edit_panel.hide()
-        self.show_registration()
+        self._activate_account(email, name)
 
     def update_account(self):
         if self._current_user_email is None:
@@ -1393,10 +1890,14 @@ class MainWindow(QMainWindow):
 
     def logout(self):
         self._current_user_email = None
+        self._library_games.clear()
         self._account_name.clear()
         self._account_email.clear()
         self._account_password.clear()
         self._account_status.clear()
+        self._login_email.clear()
+        self._login_password.clear()
+        self._login_status.clear()
         self._account_welcome.setText("Bem-vindo!")
         self._account_edit_panel.hide()
         self.ui.Conta.setText("👤 HI!")
