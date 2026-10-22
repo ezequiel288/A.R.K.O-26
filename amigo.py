@@ -65,3 +65,4 @@ class Amigo:
                 print(f"Amigo {amigo.get_nomeamigo()} removido com sucesso.")
                 return
         print("Amigo não encontrado na lista.")
+

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "137c0515-4180-4185-91c7-04c21f766266",
+    "usuario": "arthur@gmail.com",
+    "tipo": "compra",
+    "jogos": [
+      {
+        "id": "0",
+        "titulo": "Grand Theft Auto VI",
+        "valor": 314.3
+      }
+    ],
+    "valor": 314.3,
+    "valor_pago": 314.3,
+    "data": "2026-10-22T12:39:40.653554+00:00"
+  },
+  {
+    "id": "b20daf26-290a-45cf-bfe5-a82b570e0fe1",
+    "compra_id": "137c0515-4180-4185-91c7-04c21f766266",
+    "usuario": "arthur@gmail.com",
+    "tipo": "reembolso",
+    "jogos": [
+      {
+        "id": "0",
+        "titulo": "Grand Theft Auto VI",
+        "valor": 314.3
+      }
+    ],
+    "valor": 314.3,
+    "data": "2026-10-22T12:39:50.348623+00:00"
+  }
+]
