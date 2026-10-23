@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "titulo": "Chalezinho da Capybara",
+    "descricao": "CA PY BA RA!",
+    "preco": 100.0,
+    "empresa": "LIMON GAMES",
+    "capa": "dados\\capas\\31c4ec10edba44dd9e88cc08658c54b4.jpg"
+  }
+]
