@@ -1,74 +1,51 @@
-import os
-import time
-
 class Biblioteca:
-
-    def __init__(self, donousu):
-        self.__donousu = donousu
+    def __init__(self, usuario_email, jogo_id, titulo, id=None):
+        self.id = id
+        self.usuario_email = usuario_email
+        self.jogo_id = jogo_id
+        self.titulo = titulo
 
     @classmethod
-    def cadastrar(cls):
-        print("\n=== CADASTRAR BIBLIOTECA ===")
-
-        donousu = input("Dono da biblioteca: ")
-
-        return cls(donousu)
-
-    def get_donousu(self):
-        return self.__donousu
-
-    def set_donousu(self, donousu):
-        if donousu.strip() != "":
-            self.__donousu = donousu
-        else:
-            print("Dono inválido.")
-
-    def alterar(self):
-        print("\n=== ALTERAR BIBLIOTECA ===")
-
-        novo_donousu = input("Novo dono (ENTER para manter): ")
-
-        if novo_donousu != "":
-            self.set_donousu(novo_donousu)
-
-        print("Biblioteca alterada com sucesso.")
+    def from_row(cls, row):
+        if row is None:
+            return None
+        return cls(
+            row["usuario_email"],
+            row["jogo_id"],
+            row["titulo"],
+            row["id"],
+        )
 
     def exibir_dados(self):
-        return f"Dono da Biblioteca: {self.__donousu}"
+        return f"Usuário: {self.usuario_email} | Jogo: {self.titulo}"
 
     def __str__(self):
         return self.exibir_dados()
 
-    @staticmethod
-    def listar(lista_bibliotecas):
-        """
-        Lista todas as bibliotecas cadastradas.
-        """
-        print("\n=== LISTAR BIBLIOTECAS ===")
 
-        if len(lista_bibliotecas) == 0:
-            print("Nenhuma biblioteca cadastrada.")
-            return
+class BibliotecaRepositorio:
+    def __init__(self, banco):
+        self.conexao = banco.conexao
 
-        for biblioteca in lista_bibliotecas:
-            print(biblioteca)
+    def inserir(self, biblioteca):
+        cursor = self.conexao.execute(
+            "INSERT INTO biblioteca (usuario_email, jogo_id, titulo) VALUES (?, ?, ?)",
+            (biblioteca.usuario_email, biblioteca.jogo_id, biblioteca.titulo),
+        )
+        self.conexao.commit()
+        biblioteca.id = cursor.lastrowid
+        return biblioteca
 
-    def remover_biblioteca(self):
-        """
-        Remove um item da biblioteca.
-        """
+    def listar_por_usuario(self, usuario_email):
+        linhas = self.conexao.execute(
+            "SELECT id, usuario_email, jogo_id, titulo FROM biblioteca WHERE usuario_email = ? ORDER BY id",
+            (usuario_email,),
+        ).fetchall()
+        return [Biblioteca.from_row(linha) for linha in linhas]
 
-        print("\n=== REMOVER ITEM DA BIBLIOTECA ===")
-
-        item = input("Digite o nome do item: ").strip()
-
-        biblioteca = self.buscar_por_item(item)
-
-        if biblioteca is None:
-            print("Item não encontrado.")
-            return
-
-        self.__bibliotecas.remove(biblioteca)
-        self.salvar_dados()
-
-    print("Item removido com sucesso.")
+    def remover(self, usuario_email, jogo_id):
+        self.conexao.execute(
+            "DELETE FROM biblioteca WHERE usuario_email = ? AND jogo_id = ?",
+            (usuario_email, jogo_id),
+        )
+        self.conexao.commit()

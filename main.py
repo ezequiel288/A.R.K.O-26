@@ -4,6 +4,7 @@ import json
 import secrets
 import shutil
 import sys
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,8 +33,16 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtGui import QColor, QFont, QPainter, QPixmap
 from ARKO import Ui_MainWindow
+from database import BancoDeDados
+from usuario import Usuario, UsuarioRepositorio
+from jogo import Jogo, JogoRepositorio
+from amigo import Amigo, AmigoRepositorio
+from avaliacao import Avaliacao, AvaliacaoRepositorio
+from biblioteca import Biblioteca, BibliotecaRepositorio
+from carrinho import Carrinho, CarrinhoRepositorio
+from transacao import Transacao, TransacaoRepositorio
 
 
 class MainWindow(QMainWindow):
@@ -41,78 +50,47 @@ class MainWindow(QMainWindow):
     BUILTIN_GAMES = (
         {
             "titulo": "Grand Theft Auto VI",
-            "descricao": "Aventura de mundo aberto",
+            "descricao": "Aventura de mundo aberto com narrativa intensa, liberdade total e cenários enormes.",
             "preco": 314.30,
             "empresa": "Rockstar Games",
+            "desconto": 0.10,
         },
         {
             "titulo": "Marvel's Spider-Man",
-            "descricao": "Aventura de super-herói",
+            "descricao": "Além de salvar a cidade, você combina ação, parkour e grandes batalhas contra vilões.",
             "preco": 87.40,
             "empresa": "Insomniac Games",
+            "desconto": 0.18,
         },
         {
             "titulo": "Minecraft",
-            "descricao": "Construa e explore mundos",
+            "descricao": "Construção criativa, sobrevivência e exploração em um mundo infinito.",
             "preco": 59.40,
             "empresa": "Mojang Studios",
+            "desconto": 0.20,
         },
     )
 
     def __init__(self):
         super().__init__()
 
+        self.db = BancoDeDados()
+        self.usuario_repo = UsuarioRepositorio(self.db)
+        self.jogo_repo = JogoRepositorio(self.db)
+        self.amigo_repo = AmigoRepositorio(self.db)
+        self.avaliacao_repo = AvaliacaoRepositorio(self.db)
+        self.biblioteca_repo = BibliotecaRepositorio(self.db)
+        self.carrinho_repo = CarrinhoRepositorio(self.db)
+        self.transacao_repo = TransacaoRepositorio(self.db)
+
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self._current_user_email = None
+        self._migrate_legacy_data()
         self._setup_registration_tab()
         self._setup_friends_page()
-        self._game_cards = (
-            (
-                self.ui.SELgta6,
-                self.ui.GTA6_2,
-                self.ui.BibliotecaBT,
-                self.ui.ComprarBT,
-                self.ui.Preco,
-                self.ui.Desconto,
-            ),
-            (
-                self.ui.SELMspider,
-                self.ui.Mspider,
-                self.ui.BibliotecaBT_2,
-                self.ui.ComprarBT_2,
-                self.ui.Preco_2,
-                self.ui.Desconto_2,
-            ),
-            (
-                self.ui.SELMinecraft,
-                self.ui.Minecraft,
-                self.ui.BibliotecaBT_3,
-                self.ui.ComprarBT_3,
-                self.ui.Preco_3,
-                self.ui.Desconto_3,
-            ),
-        )
-        self._store_game_titles = []
-        for index, card in enumerate(self._game_cards):
-            image = card[1]
-            image.setGeometry(
-                image.x(), image.y(), image.width(), image.height() - 31
-            )
-            title = QLabel(self.BUILTIN_GAMES[index]["titulo"], self.ui.Barra1)
-            title.setGeometry(card[0].x() + 10, 444, 181, 30)
-            title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            title.setToolTip(self.BUILTIN_GAMES[index]["titulo"])
-            title.setStyleSheet(
-                "QLabel { background-color: transparent; color: white; "
-                "font-weight: bold; }"
-            )
-            title.hide()
-            self._store_game_titles.append(title)
-        self._game_cards = tuple(
-            card + (title,)
-            for card, title in zip(self._game_cards, self._store_game_titles)
-        )
+        self._game_cards = self._build_store_cards()
+        self._store_game_titles = [card[1] for card in self._game_cards]
         self._cart_games = set()
         self._library_games = set()
         self._load_transactions()
@@ -152,11 +130,178 @@ class MainWindow(QMainWindow):
             self._base_fonts[title] = title.font()
         self.setWindowState(Qt.WindowState.WindowMaximized)
 
+    def _build_cover_pixmap(self, title, color="#111111", accent="#00FF00"):
+        pixmap = QPixmap(161, 221)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(0, 0, 161, 221, QColor(color))
+        painter.fillRect(0, 0, 161, 36, QColor(accent))
+        painter.setPen(QColor("#FFFFFF"))
+        painter.setFont(QFont("Arial", 11, QFont.Weight.Bold))
+
+        words = title.split()
+        lines = []
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if len(candidate) <= 13:
+                current = candidate
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+
+        if not lines:
+            lines = [title[:12]]
+        for index, line in enumerate(lines[:3]):
+            painter.drawText(10, 58 + index * 18, line[:18])
+        painter.end()
+        return pixmap
+
+    @staticmethod
+    def _normalize_cover_name(value):
+        normalized = unicodedata.normalize("NFKD", str(value))
+        cleaned = "".join(
+            char.lower() for char in normalized if not unicodedata.combining(char)
+        )
+        cleaned = (
+            cleaned.replace("&", "and")
+            .replace("'", "")
+            .replace("\"", "")
+            .replace("-", "")
+            .replace("_", "")
+            .replace(" ", "")
+            .replace(".", "")
+        )
+        return cleaned
+
+    def _find_store_cover(self, game_title):
+        images_dir = Path(__file__).resolve().parent / "imagens"
+        if not images_dir.exists():
+            return None
+
+        normalized_title = self._normalize_cover_name(game_title)
+        best_match = None
+        best_score = -1
+
+        for file_path in sorted(images_dir.iterdir()):
+            if not file_path.is_file():
+                continue
+            if file_path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".bmp"}:
+                continue
+
+            normalized_name = self._normalize_cover_name(file_path.stem)
+            if normalized_title in normalized_name or normalized_name in normalized_title:
+                return file_path
+
+            score = 0
+            for token in ["gta", "spider", "minecraft", "dragon", "reddead", "poppy", "hollow", "souls", "fortnite", "shadow", "war", "valorant", "lastofus", "among", "stray", "fall", "fifa", "pacman", "pes", "street", "mortal", "forza"]:
+                if token in normalized_title and token in normalized_name:
+                    score += 3
+            if score > best_score:
+                best_match = file_path
+                best_score = score
+
+        return best_match
+
+    def _load_store_cover(self, game_title, fallback_color="#111111"):
+        cover_path = self._find_store_cover(game_title)
+        if cover_path is not None:
+            pixmap = QPixmap(str(cover_path))
+            if not pixmap.isNull():
+                return pixmap
+        return self._build_cover_pixmap(game_title, fallback_color)
+
+    def _build_store_cards(self):
+        cards = []
+        colors = [
+            "#111111", "#1B1B1B", "#0F172A", "#1F2937", "#332200", "#1E1B4B",
+            "#0B132B", "#2D160C", "#111827", "#0F2A2A", "#2A120C", "#101827",
+        ]
+
+        if not hasattr(self, "_store_store_widget"):
+            self._store_store_widget = QWidget(self.ui.scrollAreaWidgetContents)
+            self._store_store_widget.setObjectName("StoreGridContainer")
+            self._store_layout = QGridLayout(self._store_store_widget)
+            self._store_layout.setContentsMargins(8, 8, 8, 8)
+            self._store_layout.setHorizontalSpacing(18)
+            self._store_layout.setVerticalSpacing(24)
+            self._store_store_widget.setStyleSheet("QWidget#StoreGridContainer { background: transparent; }")
+
+        self._store_layout.setContentsMargins(12, 12, 12, 12)
+        self._store_layout.setSpacing(18)
+
+        for index, game in enumerate(self.BUILTIN_GAMES):
+            card = QFrame(self._store_store_widget)
+            card.setFixedSize(190, 330)
+            card.setStyleSheet(
+                "QFrame { background-color: #121212; color: white; border: 2px solid #FFFFFF; border-radius: 12px; }"
+            )
+
+            cover = QLabel(card)
+            cover.setPixmap(self._load_store_cover(game["titulo"], colors[index % len(colors)]))
+            cover.setScaledContents(True)
+            cover.setFixedSize(160, 200)
+            cover.move(15, 10)
+
+            title = QLabel(game["titulo"], card)
+            title.setWordWrap(True)
+            title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            title.setStyleSheet("QLabel { color: white; font-weight: bold; font-size: 11px; }")
+            title.setGeometry(10, 215, 170, 42)
+
+            price = QLabel(f"R$ {game['preco']:.2f}".replace('.', ','), card)
+            price.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            price.setStyleSheet("QLabel { background-color: #00FF00; color: black; border-radius: 8px; font-weight: bold; padding: 2px; }")
+            price.setFixedSize(80, 24)
+            price.move(15, 260)
+
+            discount = QLabel(
+                "GRÁTIS" if float(game["desconto"]) >= 1 else f"-{int(float(game['desconto']) * 100)}%",
+                card,
+            )
+            discount.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            discount.setStyleSheet("QLabel { background-color: #FFFFFF; color: black; border-radius: 8px; font-weight: bold; padding: 2px; }")
+            discount.setFixedSize(68, 24)
+            discount.move(105, 260)
+
+            library_button = QPushButton("Biblioteca", card)
+            library_button.setStyleSheet(
+                "QPushButton { background-color: #00FF00; color: black; border: 2px solid #00FF00; border-radius: 10px; font-weight: bold; }"
+            )
+            library_button.setGeometry(15, 290, 160, 28)
+            library_button.hide()
+
+            buy_button = QPushButton("Adicionar ao carrinho", card)
+            buy_button.setStyleSheet(
+                "QPushButton { background-color: #FFFFFF; color: black; border: 2px solid #FFFFFF; border-radius: 10px; font-weight: bold; }"
+                "QPushButton:hover { background-color: #000000; color: white; }"
+            )
+            buy_button.setGeometry(15, 290, 160, 28)
+
+            row, col = divmod(index, 5)
+            self._store_layout.addWidget(card, row, col)
+            cards.append((cover, title, library_button, buy_button, price, discount))
+
+        self._store_store_widget.setMinimumSize(
+            max(950, self._store_layout.sizeHint().width() + 40),
+            max(560, self._store_layout.sizeHint().height() + 80),
+        )
+        self._store_store_widget.move(0, 0)
+        self.ui.scrollAreaWidgetContents.setMinimumHeight(self._store_store_widget.height() + 40)
+        self._store_store_widget.hide()
+        return tuple(cards)
+
     def _show_page(self, page):
         self.ui.BemVindo.hide()
         self._account_tabs.hide()
         self._friends_panel.hide()
         self._library_panel.hide()
+        if hasattr(self, "_store_store_widget"):
+            self._store_store_widget.hide()
         for widget in self.ui.jogos:
             widget.hide()
         for title in self._store_game_titles:
@@ -167,39 +312,8 @@ class MainWindow(QMainWindow):
             self.ui.BemVindo.setText("Bem vindo(a) a A.R.K.O!")
             self.ui.BemVindo.show()
         elif page == "store":
-            for index, card in enumerate(self._game_cards):
-                for widget in card:
-                    if widget is card[2]:
-                        continue
-                    widget.show()
-                card[2].setVisible(index in self._library_games)
-            for index, card in enumerate(self._game_cards):
-                button = card[3]
-                if index in self._library_games:
-                    button.setText("Jogar")
-                    button.setEnabled(True)
-                    button.setStyleSheet(
-                        "QPushButton { background-color: #00FF00; color: black; "
-                        "border: 2px solid #00FF00; border-radius: 10px; "
-                        "font-weight: bold; }"
-                    )
-                elif index in self._cart_games:
-                    button.setText("Adicionado")
-                    button.setEnabled(True)
-                    button.setStyleSheet(
-                        "QPushButton { background-color: #00FF00; color: black; "
-                        "border: 2px solid #00FF00; border-radius: 10px; "
-                        "font-weight: bold; }"
-                    )
-                else:
-                    button.setText("Adicionar ao carrinho")
-                    button.setEnabled(True)
-                    button.setStyleSheet(
-                        "QPushButton { background-color: #FFFFFF; color: black; "
-                        "border: 2px solid #FFFFFF; border-radius: 10px; "
-                        "font-weight: bold; }"
-                        "QPushButton:hover { background-color: #000000; color: white; }"
-                    )
+            for widget in self.ui.jogos:
+                widget.show()
         elif page == "library":
             self._refresh_library()
             self._library_panel.show()
@@ -220,6 +334,86 @@ class MainWindow(QMainWindow):
             self._friends_panel.show()
 
         self._active_page = page
+
+    def _migrate_legacy_data(self):
+        users_file = Path(__file__).resolve().parent / "dados" / "usuario.csv"
+        if users_file.exists():
+            try:
+                with users_file.open("r", newline="", encoding="utf-8") as file:
+                    reader = csv.DictReader(file)
+                    for row in reader:
+                        if not row or not row.get("email"):
+                            continue
+                        email = str(row["email"]).strip()
+                        if not email or self.usuario_repo.buscar_por_email(email):
+                            continue
+                        nome = str(row.get("nome") or "").strip()
+                        senha = str(row.get("senha") or "").strip()
+                        if nome and senha:
+                            self.usuario_repo.inserir(Usuario(nome, email, senha))
+            except (OSError, csv.Error, UnicodeError):
+                pass
+
+        reviews_file = Path(__file__).resolve().parent / "dados" / "avaliacoes.json"
+        if reviews_file.exists():
+            try:
+                with reviews_file.open("r", encoding="utf-8") as file:
+                    reviews = json.load(file)
+                for review in reviews:
+                    if not isinstance(review, dict):
+                        continue
+                    usuario_email = str(review.get("usuario") or "").strip()
+                    jogo_id = str(review.get("jogo_id") or "").strip()
+                    if not usuario_email or not jogo_id:
+                        continue
+                    existing = self.avaliacao_repo.buscar_por_usuario_e_jogo(usuario_email, int(jogo_id))
+                    if existing is None:
+                        self.avaliacao_repo.inserir(
+                            Avaliacao(
+                                usuario_email,
+                                int(jogo_id),
+                                int(review.get("nota", 1)),
+                                review.get("data", datetime.now(timezone.utc).isoformat()),
+                            )
+                        )
+            except (OSError, json.JSONDecodeError, UnicodeError, ValueError):
+                pass
+
+        transactions_file = Path(__file__).resolve().parent / "dados" / "transacoes.json"
+        if transactions_file.exists():
+            try:
+                with transactions_file.open("r", encoding="utf-8") as file:
+                    transactions = json.load(file)
+                for transaction in transactions:
+                    if not isinstance(transaction, dict):
+                        continue
+                    transaction_id = str(transaction.get("id") or "").strip()
+                    if not transaction_id or self.transacao_repo.buscar_por_id(transaction_id):
+                        continue
+                    self.transacao_repo.inserir(
+                        Transacao(
+                            str(transaction.get("usuario") or "").strip(),
+                            str(transaction.get("tipo") or "").strip(),
+                            transaction.get("jogos") or [],
+                            float(transaction.get("valor", 0)),
+                            transaction.get("data") or datetime.now(timezone.utc).isoformat(),
+                            id=transaction_id,
+                            valor_pago=transaction.get("valor_pago"),
+                            compra_id=transaction.get("compra_id"),
+                        )
+                    )
+            except (OSError, json.JSONDecodeError, UnicodeError, ValueError):
+                pass
+
+    def _load_friends_from_db(self):
+        self._friends_list.clear()
+        if self._current_user_email is None:
+            return
+        for amigo in self.amigo_repo.listar_por_usuario(self._current_user_email):
+            item = QListWidgetItem(f"{amigo.nome} — {amigo.email}")
+            item.setData(Qt.ItemDataRole.UserRole, amigo.email)
+            item.setData(Qt.ItemDataRole.UserRole + 1, amigo.nome)
+            self._friends_list.addItem(item)
 
     def _setup_registration_tab(self):
         self._account_tabs = QTabWidget(parent=self.ui.Barra1)
@@ -510,46 +704,23 @@ class MainWindow(QMainWindow):
         self._show_page("library")
 
     def _load_transactions(self):
-        self._transactions_file = (
-            Path(__file__).resolve().parent / "dados" / "transacoes.json"
-        )
         self._transactions = []
         self._transactions_load_error = False
-        if not self._transactions_file.exists():
-            return
-
         try:
-            with self._transactions_file.open("r", encoding="utf-8") as file:
-                transactions = json.load(file)
-            if not isinstance(transactions, list) or any(
-                not isinstance(transaction, dict)
-                or not {"id", "usuario", "tipo", "jogos", "valor", "data"}.issubset(
-                    transaction
+            for transaction in self.transacao_repo.listar():
+                self._transactions.append(
+                    {
+                        "id": transaction.id,
+                        "usuario": transaction.usuario_email,
+                        "tipo": transaction.tipo,
+                        "jogos": transaction.jogos,
+                        "valor": float(transaction.valor),
+                        "valor_pago": transaction.valor_pago,
+                        "data": transaction.data,
+                        "compra_id": transaction.compra_id,
+                    }
                 )
-                or not isinstance(transaction["id"], str)
-                or not isinstance(transaction["usuario"], str)
-                or not isinstance(transaction["tipo"], str)
-                or transaction["tipo"] not in {"compra", "reembolso"}
-                or not isinstance(transaction["jogos"], list)
-                or not isinstance(transaction["valor"], (int, float))
-                or not isinstance(transaction["data"], str)
-                or (
-                    transaction["tipo"] == "reembolso"
-                    and not isinstance(transaction.get("compra_id"), str)
-                )
-                or any(
-                    not isinstance(game, dict)
-                    or not {"id", "titulo", "valor"}.issubset(game)
-                    or not isinstance(game["id"], str)
-                    or not isinstance(game["titulo"], str)
-                    or not isinstance(game["valor"], (int, float))
-                    for game in transaction["jogos"]
-                )
-                for transaction in transactions
-            ):
-                raise ValueError("O arquivo de transações possui um formato inválido.")
-            self._transactions = transactions
-        except (OSError, json.JSONDecodeError, UnicodeError, ValueError) as error:
+        except Exception as error:
             self._transactions_load_error = True
             QMessageBox.critical(
                 self,
@@ -558,28 +729,22 @@ class MainWindow(QMainWindow):
             )
 
     def _save_transaction(self, transaction):
-        if self._transactions_load_error:
-            QMessageBox.critical(
-                self,
-                "Transação indisponível",
-                "Corrija o arquivo dados/transacoes.json antes de continuar.",
-            )
-            return False
-
-        updated_transactions = [*self._transactions, transaction]
-        temporary_file = self._transactions_file.with_suffix(".json.tmp")
         try:
-            self._transactions_file.parent.mkdir(parents=True, exist_ok=True)
-            with temporary_file.open("w", encoding="utf-8") as file:
-                json.dump(updated_transactions, file, ensure_ascii=False, indent=2)
-            temporary_file.replace(self._transactions_file)
-        except (OSError, TypeError, ValueError) as error:
-            try:
-                temporary_file.unlink(missing_ok=True)
-            except OSError as cleanup_error:
-                error = OSError(
-                    f"{error}; falha ao remover arquivo temporário: {cleanup_error}"
+            self.transacao_repo.inserir(
+                Transacao(
+                    transaction["usuario"],
+                    transaction["tipo"],
+                    transaction["jogos"],
+                    float(transaction["valor"]),
+                    transaction["data"],
+                    id=transaction["id"],
+                    valor_pago=transaction.get("valor_pago"),
+                    compra_id=transaction.get("compra_id"),
                 )
+            )
+            self._transactions = [*self._transactions, transaction]
+            return True
+        except Exception as error:
             QMessageBox.critical(
                 self,
                 "Erro ao salvar transação",
@@ -587,34 +752,20 @@ class MainWindow(QMainWindow):
             )
             return False
 
-        self._transactions = updated_transactions
-        return True
-
     def _load_reviews(self):
-        self._reviews_file = (
-            Path(__file__).resolve().parent / "dados" / "avaliacoes.json"
-        )
         self._reviews = []
         self._reviews_load_error = False
-        if not self._reviews_file.exists():
-            return
-
         try:
-            with self._reviews_file.open("r", encoding="utf-8") as file:
-                reviews = json.load(file)
-            if not isinstance(reviews, list) or any(
-                not isinstance(review, dict)
-                or not {"usuario", "jogo_id", "nota", "data"}.issubset(review)
-                or not isinstance(review["usuario"], str)
-                or not isinstance(review["jogo_id"], str)
-                or type(review["nota"]) is not int
-                or not 1 <= review["nota"] <= 5
-                or not isinstance(review["data"], str)
-                for review in reviews
-            ):
-                raise ValueError("O arquivo de avaliações possui um formato inválido.")
-            self._reviews = reviews
-        except (OSError, json.JSONDecodeError, UnicodeError, ValueError) as error:
+            for review in self.avaliacao_repo.listar():
+                self._reviews.append(
+                    {
+                        "usuario": review.usuario_email,
+                        "jogo_id": str(review.jogo_id),
+                        "nota": int(review.nota),
+                        "data": review.data,
+                    }
+                )
+        except Exception as error:
             self._reviews_load_error = True
             QMessageBox.critical(
                 self,
@@ -623,36 +774,28 @@ class MainWindow(QMainWindow):
             )
 
     def _save_reviews(self, reviews):
-        if self._reviews_load_error:
-            QMessageBox.critical(
-                self,
-                "Avaliação indisponível",
-                "Corrija o arquivo dados/avaliacoes.json antes de continuar.",
-            )
-            return False
-
-        temporary_file = self._reviews_file.with_suffix(".json.tmp")
         try:
-            self._reviews_file.parent.mkdir(parents=True, exist_ok=True)
-            with temporary_file.open("w", encoding="utf-8") as file:
-                json.dump(reviews, file, ensure_ascii=False, indent=2)
-            temporary_file.replace(self._reviews_file)
-        except (OSError, TypeError, ValueError) as error:
-            try:
-                temporary_file.unlink(missing_ok=True)
-            except OSError as cleanup_error:
-                error = OSError(
-                    f"{error}; falha ao remover arquivo temporário: {cleanup_error}"
-                )
+            self._reviews = reviews
+            for review in reviews:
+                usuario = str(review["usuario"]).strip()
+                jogo_id = int(review["jogo_id"])
+                existing = self.avaliacao_repo.buscar_por_usuario_e_jogo(usuario, jogo_id)
+                if existing is None:
+                    self.avaliacao_repo.inserir(
+                        Avaliacao(usuario, jogo_id, int(review["nota"]), review["data"])
+                    )
+                else:
+                    existing.nota = int(review["nota"])
+                    existing.data = review["data"]
+                    self.avaliacao_repo.atualizar(existing)
+            return True
+        except Exception as error:
             QMessageBox.critical(
                 self,
                 "Erro ao salvar avaliação",
                 f"Não foi possível salvar a avaliação: {error}",
             )
             return False
-
-        self._reviews = reviews
-        return True
 
     def _active_purchase_for_game(self, user_email, game_index):
         game_id = str(game_index)
@@ -713,30 +856,19 @@ class MainWindow(QMainWindow):
         self._custom_games_file = Path(__file__).resolve().parent / "dados" / "jogos.json"
         self._custom_games = []
         self._custom_games_load_error = False
-        if not self._custom_games_file.exists():
-            return
-
         try:
-            with self._custom_games_file.open("r", encoding="utf-8") as file:
-                games = json.load(file)
-            if not isinstance(games, list) or any(
-                not isinstance(game, dict)
-                or not {"titulo", "descricao", "preco", "empresa", "capa"}.issubset(game)
-                or not all(
-                    isinstance(game[key], str)
-                    for key in ("titulo", "descricao", "empresa", "capa")
-                )
-                or not isinstance(game["preco"], (int, float))
-                for game in games
-            ):
-                raise ValueError("O arquivo de jogos possui um formato inválido.")
-            data_directory = Path(__file__).resolve().parent
-            for game in games:
-                cover_path = (data_directory / game["capa"]).resolve()
-                if not cover_path.is_relative_to(data_directory):
-                    raise ValueError("O caminho da capa está fora da pasta do projeto.")
-            self._custom_games = games
-        except (OSError, json.JSONDecodeError, UnicodeError, ValueError) as error:
+            self._custom_games = [
+                {
+                    "id": game.id,
+                    "titulo": game.titulo,
+                    "descricao": game.descricao,
+                    "preco": float(game.preco),
+                    "empresa": game.empresa,
+                    "capa": game.capa,
+                }
+                for game in self.jogo_repo.listar()
+            ]
+        except Exception as error:
             self._custom_games_load_error = True
             QMessageBox.critical(
                 self,
@@ -1198,15 +1330,38 @@ class MainWindow(QMainWindow):
             }
             updated_games = list(self._custom_games)
             if game_index is None:
-                updated_games.append(game)
+                novo_jogo = Jogo(title, description, float(price_field.value()), company, str(relative_cover))
+                self.jogo_repo.inserir(novo_jogo)
+                updated_games.append({
+                    "id": novo_jogo.id,
+                    "titulo": title,
+                    "descricao": description,
+                    "preco": float(price_field.value()),
+                    "empresa": company,
+                    "capa": str(relative_cover),
+                })
             else:
-                updated_games[game_index] = game
+                jogo_db = self.jogo_repo.buscar_por_id(self._custom_games[game_index]["id"])
+                if jogo_db is not None:
+                    jogo_db.titulo = title
+                    jogo_db.descricao = description
+                    jogo_db.preco = float(price_field.value())
+                    jogo_db.empresa = company
+                    jogo_db.capa = str(relative_cover)
+                    self.jogo_repo.atualizar(jogo_db)
+                updated_games[game_index] = {
+                    "id": self._custom_games[game_index]["id"],
+                    "titulo": title,
+                    "descricao": description,
+                    "preco": float(price_field.value()),
+                    "empresa": company,
+                    "capa": str(relative_cover),
+                }
             destination_cover = (
                 Path(__file__).resolve().parent / relative_cover
                 if source_cover is not None
                 else None
             )
-            temporary_file = self._custom_games_file.with_suffix(".json.tmp")
             try:
                 if source_cover is not None and destination_cover is not None:
                     cover_dir.mkdir(parents=True, exist_ok=True)
@@ -1215,27 +1370,11 @@ class MainWindow(QMainWindow):
                     cover_dir.mkdir(parents=True, exist_ok=True)
                     if not initial_cover.save(str(destination_cover), "PNG"):
                         raise OSError("Não foi possível salvar a capa do jogo.")
-                with temporary_file.open("w", encoding="utf-8") as file:
-                    json.dump(updated_games, file, ensure_ascii=False, indent=2)
-                temporary_file.replace(self._custom_games_file)
             except (OSError, TypeError, ValueError) as error:
-                cleanup_errors = []
-                for temporary_path in (destination_cover, temporary_file):
-                    if temporary_path is None:
-                        continue
-                    try:
-                        temporary_path.unlink(missing_ok=True)
-                    except OSError as cleanup_error:
-                        cleanup_errors.append(str(cleanup_error))
-                cleanup_message = (
-                    f"\nFalha ao limpar arquivo temporário: {'; '.join(cleanup_errors)}"
-                    if cleanup_errors
-                    else ""
-                )
                 QMessageBox.critical(
                     dialog,
                     "Erro ao salvar jogo",
-                    f"Não foi possível salvar o jogo: {error}{cleanup_message}",
+                    f"Não foi possível salvar o jogo: {error}",
                 )
                 return
 
@@ -1313,6 +1452,15 @@ class MainWindow(QMainWindow):
             }
         )
         if self._save_reviews(updated_reviews):
+            existing_db_review = self.avaliacao_repo.buscar_por_usuario_e_jogo(self._current_user_email, game_index)
+            if existing_db_review is None:
+                self.avaliacao_repo.inserir(
+                    Avaliacao(self._current_user_email, game_index, rating, datetime.now(timezone.utc).isoformat())
+                )
+            else:
+                existing_db_review.nota = rating
+                existing_db_review.data = datetime.now(timezone.utc).isoformat()
+                self.avaliacao_repo.atualizar(existing_db_review)
             self._refresh_library()
 
     def remove_builtin_review(self, game_index):
@@ -1360,6 +1508,9 @@ class MainWindow(QMainWindow):
             )
         ]
         if self._save_reviews(updated_reviews):
+            existing_db_review = self.avaliacao_repo.buscar_por_usuario_e_jogo(self._current_user_email, game_index)
+            if existing_db_review is not None:
+                self.avaliacao_repo.excluir(existing_db_review.id)
             self._refresh_library()
 
     def refund_builtin_game(self, game_index):
@@ -1422,6 +1573,7 @@ class MainWindow(QMainWindow):
         if not self._save_transaction(refund):
             return
 
+        self.biblioteca_repo.remover(self._current_user_email, game_index)
         self._library_games.discard(game_index)
         self._refresh_library()
         QMessageBox.information(
@@ -1444,16 +1596,11 @@ class MainWindow(QMainWindow):
 
         updated_games = list(self._custom_games)
         removed_game = updated_games.pop(game_index)
-        temporary_file = self._custom_games_file.with_suffix(".json.tmp")
         try:
-            with temporary_file.open("w", encoding="utf-8") as file:
-                json.dump(updated_games, file, ensure_ascii=False, indent=2)
-            temporary_file.replace(self._custom_games_file)
-        except (OSError, TypeError, ValueError) as error:
-            try:
-                temporary_file.unlink(missing_ok=True)
-            except OSError as cleanup_error:
-                error = OSError(f"{error}; falha ao remover arquivo temporário: {cleanup_error}")
+            jogo_db = self.jogo_repo.buscar_por_id(removed_game["id"])
+            if jogo_db is not None:
+                self.jogo_repo.excluir(jogo_db.id)
+        except Exception as error:
             QMessageBox.critical(
                 self,
                 "Erro ao apagar jogo",
@@ -1511,6 +1658,16 @@ class MainWindow(QMainWindow):
             self._friend_status.setText("Selecione um amigo para remover.")
             return
 
+        email = str(friend_item.data(Qt.ItemDataRole.UserRole) or "")
+        if not email:
+            self._friend_status.setStyleSheet("color: #FF7777;")
+            self._friend_status.setText("Não foi possível identificar o amigo selecionado.")
+            return
+
+        existing = self.amigo_repo.buscar_por_email(self._current_user_email, email)
+        if existing is not None:
+            self.amigo_repo.excluir(existing.id)
+
         self._friends_list.takeItem(self._friends_list.row(friend_item))
         self._editing_friend_item = None
         self._add_friend_form.hide()
@@ -1547,11 +1704,18 @@ class MainWindow(QMainWindow):
                 return
 
         is_editing = self._editing_friend_item is not None
-        if not is_editing:
+        if is_editing:
+            friend_item = self._editing_friend_item
+            existing = self.amigo_repo.buscar_por_email(self._current_user_email, str(friend_item.data(Qt.ItemDataRole.UserRole) or ""))
+            if existing is not None:
+                existing.nome = name
+                existing.email = email
+                self.amigo_repo.atualizar(existing)
+        else:
+            self.amigo_repo.inserir(Amigo(self._current_user_email, name, email))
             friend_item = QListWidgetItem()
             self._friends_list.addItem(friend_item)
-        else:
-            friend_item = self._editing_friend_item
+
         friend_item.setText(f"{name} — {email}")
         friend_item.setData(Qt.ItemDataRole.UserRole, email)
         friend_item.setData(Qt.ItemDataRole.UserRole + 1, name)
@@ -1583,6 +1747,7 @@ class MainWindow(QMainWindow):
     def _activate_account(self, email, name):
         self._current_user_email = email
         self._load_user_library(email)
+        self._load_friends_from_db()
         self.ui.Conta.setText(f"👤 {name}")
         self._account_welcome.setText(f"Bem-vindo: {name}")
         self._account_name.setText(name)
@@ -1676,53 +1841,39 @@ class MainWindow(QMainWindow):
             self._login_status.setText("Digite seu e-mail e sua senha.")
             return
 
-        users_file = Path(__file__).resolve().parent / "dados" / "usuario.csv"
-        try:
-            with users_file.open("r", newline="", encoding="utf-8") as file:
-                reader = csv.DictReader(file)
-                if not reader.fieldnames or not {"nome", "senha", "email"}.issubset(
-                    reader.fieldnames
-                ):
-                    raise ValueError("O arquivo de contas possui um cabeçalho inválido.")
-                account = next(
-                    (
-                        row
-                        for row in reader
-                        if str(row.get("email") or "").strip().casefold()
-                        == email.casefold()
-                    ),
-                    None,
-                )
-        except FileNotFoundError:
-            self._login_status.setStyleSheet("color: #FF7777;")
-            self._login_status.setText("Nenhuma conta cadastrada foi encontrada.")
-            return
-        except (OSError, csv.Error, UnicodeError, ValueError) as error:
-            QMessageBox.critical(
-                self,
-                "Erro ao entrar",
-                f"Não foi possível ler as contas salvas: {error}",
-            )
-            return
+        account = self.usuario_repo.buscar_por_email(email)
+        if account is None:
+            users_file = Path(__file__).resolve().parent / "dados" / "usuario.csv"
+            try:
+                with users_file.open("r", newline="", encoding="utf-8") as file:
+                    reader = csv.DictReader(file)
+                    row = next(
+                        (
+                            row
+                            for row in reader
+                            if str(row.get("email") or "").strip().casefold() == email.casefold()
+                        ),
+                        None,
+                    )
+                if row is not None:
+                    account = Usuario(str(row.get("nome") or "").strip(), email, str(row.get("senha") or "").strip())
+            except (FileNotFoundError, OSError, csv.Error, UnicodeError):
+                pass
 
-        if (
-            account is None
-            or not account.get("senha")
-            or not str(account.get("nome") or "").strip()
-        ):
+        if account is None or not account.senha or not account.nome:
             self._login_status.setStyleSheet("color: #FF7777;")
             self._login_status.setText("E-mail ou senha incorretos.")
             return
 
         password_matches, needs_upgrade = self._verify_password(
-            password, account["senha"]
+            password, account.senha
         )
         if not password_matches:
             self._login_status.setStyleSheet("color: #FF7777;")
             self._login_status.setText("E-mail ou senha incorretos.")
             return
 
-        account_email = str(account.get("email") or "").strip()
+        account_email = str(account.email or "").strip()
         if needs_upgrade and not self._upgrade_legacy_password(
             account_email, self._hash_password(password)
         ):
@@ -1730,7 +1881,7 @@ class MainWindow(QMainWindow):
 
         self._login_status.setStyleSheet("color: #00FF00;")
         self._login_status.setText("Login realizado com sucesso.")
-        self._activate_account(account_email, str(account["nome"]).strip())
+        self._activate_account(account_email, str(account.nome).strip())
 
     def _hash_password(self, password):
         salt = secrets.token_bytes(16)
@@ -1769,18 +1920,14 @@ class MainWindow(QMainWindow):
             self._registration_status.setText("Digite um e-mail válido.")
             return
 
+        existing = self.usuario_repo.buscar_por_email(email)
+        if existing is not None:
+            self._registration_status.setStyleSheet("color: #FF7777;")
+            self._registration_status.setText("Já existe uma conta com esse e-mail.")
+            return
+
         users_file = Path(__file__).resolve().parent / "dados" / "usuario.csv"
         try:
-            if users_file.exists():
-                with users_file.open("r", newline="", encoding="utf-8") as file:
-                    for user in csv.DictReader(file):
-                        if user.get("email", "").strip().casefold() == email.casefold():
-                            self._registration_status.setStyleSheet("color: #FF7777;")
-                            self._registration_status.setText(
-                                "Já existe uma conta com esse e-mail."
-                            )
-                            return
-
             users_file.parent.mkdir(parents=True, exist_ok=True)
             has_header = users_file.exists() and users_file.stat().st_size > 0
             if has_header:
@@ -1800,6 +1947,8 @@ class MainWindow(QMainWindow):
                 f"Não foi possível salvar o cadastro: {error}",
             )
             return
+
+        self.usuario_repo.inserir(Usuario(name, email, self._hash_password(password)))
 
         self._registration_name.clear()
         self._registration_email.clear()
@@ -1881,6 +2030,13 @@ class MainWindow(QMainWindow):
             )
             return
 
+        current_user = self.usuario_repo.buscar_por_email(self._current_user_email)
+        if current_user is not None:
+            current_user.nome = name
+            current_user.email = email
+            current_user.senha = self._hash_password(password) if password else current_user.senha
+            self.usuario_repo.atualizar(current_user)
+
         self._current_user_email = email
         self._account_password.clear()
         self.ui.Conta.setText(f"👤 {name}")
@@ -1891,6 +2047,7 @@ class MainWindow(QMainWindow):
     def logout(self):
         self._current_user_email = None
         self._library_games.clear()
+        self._friends_list.clear()
         self._account_name.clear()
         self._account_email.clear()
         self._account_password.clear()
@@ -2014,6 +2171,11 @@ class MainWindow(QMainWindow):
         }
         if not self._save_transaction(transaction):
             return
+
+        for game in games:
+            self.biblioteca_repo.inserir(
+                Biblioteca(self._current_user_email, int(game["id"]), game["titulo"])
+            )
 
         quantity = len(games)
         self._library_games.update(self._cart_games)

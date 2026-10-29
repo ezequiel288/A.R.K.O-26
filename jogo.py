@@ -1,118 +1,86 @@
-import os
-import time
-
 class Jogo:
-
-    def __init__(self, titulo, descricao, preco, empresa):
-        self.__titulo = titulo
-        self.__descricao = descricao
-        self.__preco = preco
-        self.__empresa = empresa
+    def __init__(self, titulo, descricao, preco, empresa, capa="", id=None):
+        self.id = id
+        self.titulo = titulo
+        self.descricao = descricao
+        self.preco = preco
+        self.empresa = empresa
+        self.capa = capa
 
     @classmethod
-    def cadastrar(cls):
-        print("\n=== CADASTRAR JOGO ===")
-
-        titulo = input("Título: ")
-        descricao = input("Descrição: ")
-        preco = input("Preço: ")
-        empresa = input("Empresa: ")
-
-        return cls(titulo, descricao, preco, empresa)
-
-    def get_titulo(self):
-        return self.__titulo
-
-    def set_titulo(self, titulo):
-        if titulo.strip() != "":
-            self.__titulo = titulo
-        else:
-            print("Título inválido.")
-
-    def get_descricao(self):
-        return self.__descricao
-
-    def set_descricao(self, descricao):
-        if descricao.strip() != "":
-            self.__descricao = descricao
-        else:
-            print("Descrição inválida.")
-
-    def get_preco(self):
-        return self.__preco
-
-    def set_preco(self, preco):
-        if preco.strip() != "":
-            self.__preco = preco
-        else:
-            print("Preço inválido.")
-
-    def get_empresa(self):
-        return self.__empresa
-
-    def set_empresa(self, empresa):
-        if empresa.strip() != "":
-            self.__empresa = empresa
-        else:
-            print("Empresa inválida.")
-
-    def alterar(self):
-        print("\n=== ALTERAR JOGO ===")
-
-        novo_titulo = input("Novo título (ENTER para manter): ")
-        if novo_titulo != "":
-            self.set_titulo(novo_titulo)
-
-        nova_descricao = input("Nova descrição (ENTER para manter): ")
-        if nova_descricao != "":
-            self.set_descricao(nova_descricao)
-
-        novo_preco = input("Novo preço (ENTER para manter): ")
-        if novo_preco != "":
-            self.set_preco(novo_preco)
-
-        nova_empresa = input("Nova empresa (ENTER para manter): ")
-        if nova_empresa != "":
-            self.set_empresa(nova_empresa)
-
-        print("Jogo alterado com sucesso.")
+    def from_row(cls, row):
+        if row is None:
+            return None
+        return cls(
+            row["titulo"],
+            row["descricao"],
+            row["preco"],
+            row["empresa"],
+            row["capa"],
+            row["id"],
+        )
 
     def exibir_dados(self):
-        return f"Título: {self.__titulo} | Descrição: {self.__descricao} | Preço: {self.__preco} | Empresa: {self.__empresa}"
+        return (
+            f"Título: {self.titulo} | Descrição: {self.descricao} | "
+            f"Preço: {self.preco} | Empresa: {self.empresa}"
+        )
 
     def __str__(self):
         return self.exibir_dados()
 
-    @staticmethod
-    def listar(lista_jogos):
-        """
-        Lista todos os jogos cadastrados.
-        """
-        print("\n=== LISTAR JOGOS ===")
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "titulo": self.titulo,
+            "descricao": self.descricao,
+            "preco": self.preco,
+            "empresa": self.empresa,
+            "capa": self.capa,
+        }
 
-        if len(lista_jogos) == 0:
-            print("Nenhum jogo cadastrado.")
-            return
 
-        for jogo in lista_jogos:
-            print(jogo)
+class JogoRepositorio:
+    def __init__(self, banco):
+        self.conexao = banco.conexao
 
-    def remover_jogo(self):
-        """
-        Remove um jogo pelo título.
-        """
+    def inserir(self, jogo):
+        cursor = self.conexao.execute(
+            "INSERT INTO jogos (titulo, descricao, preco, empresa, capa) VALUES (?, ?, ?, ?, ?)",
+            (jogo.titulo, jogo.descricao, jogo.preco, jogo.empresa, jogo.capa),
+        )
+        self.conexao.commit()
+        jogo.id = cursor.lastrowid
+        return jogo
 
-        print("\n=== REMOVER JOGO ===")
+    def listar(self):
+        linhas = self.conexao.execute(
+            "SELECT id, titulo, descricao, preco, empresa, capa FROM jogos ORDER BY id"
+        ).fetchall()
+        return [Jogo.from_row(linha) for linha in linhas]
 
-        titulo = input("Digite o título: ").strip()
+    def buscar_por_id(self, id):
+        linha = self.conexao.execute(
+            "SELECT id, titulo, descricao, preco, empresa, capa FROM jogos WHERE id = ?",
+            (id,),
+        ).fetchone()
+        return Jogo.from_row(linha)
 
-        jogo = self.buscar_por_titulo(titulo)
+    def buscar_por_titulo(self, titulo):
+        linha = self.conexao.execute(
+            "SELECT id, titulo, descricao, preco, empresa, capa FROM jogos WHERE titulo = ?",
+            (titulo,),
+        ).fetchone()
+        return Jogo.from_row(linha)
 
-        if jogo is None:
-            print("Jogo não encontrado.")
-            return
+    def atualizar(self, jogo):
+        self.conexao.execute(
+            "UPDATE jogos SET titulo = ?, descricao = ?, preco = ?, empresa = ?, capa = ? WHERE id = ?",
+            (jogo.titulo, jogo.descricao, jogo.preco, jogo.empresa, jogo.capa, jogo.id),
+        )
+        self.conexao.commit()
+        return jogo
 
-        self.__jogos.remove(jogo)
-        self.salvar_dados()
-
-    print("Jogo removido com sucesso.")
+    def excluir(self, id):
+        self.conexao.execute("DELETE FROM jogos WHERE id = ?", (id,))
+        self.conexao.commit()

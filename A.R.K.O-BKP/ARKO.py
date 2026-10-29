@@ -438,7 +438,7 @@ class Ui_MainWindow(object):
         self.Scroll1 = QtWidgets.QScrollBar(parent=self.scrollAreaWidgetContents)
         self.Scroll1.setGeometry(QtCore.QRect(1280, 190, 20, 601))
         self.Scroll1.setStyleSheet("QScrollBar:vertical {\n"
-"    background: #FOFOFO;\n"
+"    background: #F0F0F0;\n"
 "    width: 10px;\n"
 "}\n"
 "\n"

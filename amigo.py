@@ -1,68 +1,64 @@
-import os
-import time
-
 class Amigo:
-    def __init__(self, emailamigo, nomeamigo):
-        self.__emailamigo = emailamigo
-        self.__nomeamigo = nomeamigo
+    def __init__(self, usuario_email, nome, email, id=None):
+        self.id = id
+        self.usuario_email = usuario_email
+        self.nome = nome
+        self.email = email
 
     @classmethod
-    def cadastrar(cls):
-        print("\n=== CADASTRAR AMIGO ===")
-        emailamigo = input("Email do amigo: ")
-        nomeamigo = input("Nome do amigo: ")
-        return cls(emailamigo, nomeamigo)
-
-    def get_emailamigo(self):
-        return self.__emailamigo
-
-    def set_emailamigo(self, emailamigo):
-        if emailamigo.strip() != "":
-            self.__emailamigo = emailamigo
-        else:
-            print("Email inválido.")
-
-    def get_nomeamigo(self):
-        return self.__nomeamigo
-
-    def set_nomeamigo(self, nomeamigo):
-        if nomeamigo.strip() != "":
-            self.__nomeamigo = nomeamigo
-        else:
-            print("Nome inválido.")
-
-    def alterar(self):
-        print("\n=== ALTERAR AMIGO ===")
-        novo_email = input("Novo email (ENTER para manter): ")
-        if novo_email != "":
-            self.set_emailamigo(novo_email)
-        novo_nome = input("Novo nome (ENTER para manter): ")
-        if novo_nome != "":
-            self.set_nomeamigo(novo_nome)
-        print("Amigo alterado com sucesso.")
+    def from_row(cls, row):
+        if row is None:
+            return None
+        return cls(
+            row["usuario_email"],
+            row["nome"],
+            row["email"],
+            row["id"],
+        )
 
     def exibir_dados(self):
-        return f"Email do Amigo: {self.__emailamigo} | Nome do Amigo: {self.__nomeamigo}"
+        return f"Nome: {self.nome} | Email: {self.email}"
 
     def __str__(self):
         return self.exibir_dados()
 
-    @staticmethod
-    def listar(lista_amigos):
-        print("\n=== LISTAR AMIGOS ===")
-        if len(lista_amigos) == 0:
-            print("Nenhum amigo cadastrado.")
-            return
-        for amigo in lista_amigos:
-            print(amigo)
 
-    @staticmethod
-    def remover_amigo(lista_amigos, email_alvo):
-        print("\n=== REMOVER AMIGO ===")
-        for amigo in lista_amigos:
-            if amigo.get_emailamigo() == email_alvo:
-                lista_amigos.remove(amigo)
-                print(f"Amigo {amigo.get_nomeamigo()} removido com sucesso.")
-                return
-        print("Amigo não encontrado na lista.")
+class AmigoRepositorio:
+    def __init__(self, banco):
+        self.conexao = banco.conexao
+
+    def inserir(self, amigo):
+        cursor = self.conexao.execute(
+            "INSERT INTO amigos (usuario_email, nome, email) VALUES (?, ?, ?)",
+            (amigo.usuario_email, amigo.nome, amigo.email),
+        )
+        self.conexao.commit()
+        amigo.id = cursor.lastrowid
+        return amigo
+
+    def listar_por_usuario(self, usuario_email):
+        linhas = self.conexao.execute(
+            "SELECT id, usuario_email, nome, email FROM amigos WHERE usuario_email = ? ORDER BY nome",
+            (usuario_email,),
+        ).fetchall()
+        return [Amigo.from_row(linha) for linha in linhas]
+
+    def buscar_por_email(self, usuario_email, email):
+        linha = self.conexao.execute(
+            "SELECT id, usuario_email, nome, email FROM amigos WHERE usuario_email = ? AND email = ?",
+            (usuario_email, email),
+        ).fetchone()
+        return Amigo.from_row(linha)
+
+    def atualizar(self, amigo):
+        self.conexao.execute(
+            "UPDATE amigos SET nome = ?, email = ? WHERE id = ?",
+            (amigo.nome, amigo.email, amigo.id),
+        )
+        self.conexao.commit()
+        return amigo
+
+    def excluir(self, id):
+        self.conexao.execute("DELETE FROM amigos WHERE id = ?", (id,))
+        self.conexao.commit()
 

@@ -1,4 +1,4 @@
 INSTALAR O AMBIENTE DE INTERFACE
-python -m pip install PyQt6 PyQt6-tools
+pip install PyQt6
 EXECUTAR O APP
 python ./main.py

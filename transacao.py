@@ -1,89 +1,93 @@
-import os
-import time
+import json
+
 
 class Transacao:
-
-    def __init__(self, transacao, jogocomprado):
-        self.__transacao = transacao
-        self.__jogocomprado = jogocomprado
+    def __init__(self, usuario_email, tipo, jogos, valor, data, id=None, valor_pago=None, compra_id=None):
+        self.id = id
+        self.usuario_email = usuario_email
+        self.tipo = tipo
+        self.jogos = jogos or []
+        self.valor = valor
+        self.valor_pago = valor_pago
+        self.data = data
+        self.compra_id = compra_id
 
     @classmethod
-    def cadastrar(cls):
-        print("\n=== CADASTRAR TRANSAÇÃO ===")
-
-        transacao = input("Tipo de transação: ")
-        jogocomprado = input("Jogo comprado: ")
-
-        return cls(transacao, jogocomprado)
-
-    def get_transacao(self):
-        return self.__transacao
-
-    def set_transacao(self, transacao):
-        if transacao.strip() != "":
-            self.__transacao = transacao
-        else:
-            print("Transação inválida.")
-
-    def get_jogocomprado(self):
-        return self.__jogocomprado
-
-    def set_jogocomprado(self, jogocomprado):
-        if jogocomprado.strip() != "":
-            self.__jogocomprado = jogocomprado
-        else:
-            print("Jogo inválido.")
-
-    def alterar(self):
-        print("\n=== ALTERAR TRANSAÇÃO ===")
-
-        nova_transacao = input("Nova transação (ENTER para manter): ")
-        if nova_transacao != "":
-            self.set_transacao(nova_transacao)
-
-        novo_jogo = input("Novo jogo comprado (ENTER para manter): ")
-        if novo_jogo != "":
-            self.set_jogocomprado(novo_jogo)
-
-        print("Transação alterada com sucesso.")
+    def from_row(cls, row):
+        if row is None:
+            return None
+        return cls(
+            row["usuario_email"],
+            row["tipo"],
+            json.loads(row["jogos"]),
+            row["valor"],
+            row["data"],
+            row["id"],
+            row["valor_pago"],
+            row["compra_id"],
+        )
 
     def exibir_dados(self):
-        return f"Transação: {self.__transacao} | Jogo comprado: {self.__jogocomprado}"
+        return f"Usuário: {self.usuario_email} | Tipo: {self.tipo} | Valor: {self.valor}"
 
     def __str__(self):
         return self.exibir_dados()
 
-    @staticmethod
-    def listar(lista_transacoes):
-        """
-        Lista todas as transações cadastradas.
-        """
-        print("\n=== LISTAR TRANSAÇÕES ===")
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "usuario": self.usuario_email,
+            "tipo": self.tipo,
+            "jogos": self.jogos,
+            "valor": self.valor,
+            "valor_pago": self.valor_pago,
+            "data": self.data,
+            "compra_id": self.compra_id,
+        }
 
-        if len(lista_transacoes) == 0:
-            print("Nenhuma transação cadastrada.")
-            return
 
-        for transacao in lista_transacoes:
-            print(transacao)
-    
-    def remover_transacao(self):
-        """
-        Remove uma transação pelo ID.
-        """
+class TransacaoRepositorio:
+    def __init__(self, banco):
+        self.conexao = banco.conexao
 
-        print("\n=== REMOVER TRANSAÇÃO ===")
+    def inserir(self, transacao):
+        self.conexao.execute(
+            "INSERT INTO transacoes (id, usuario_email, tipo, jogos, valor, valor_pago, data, compra_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                transacao.id,
+                transacao.usuario_email,
+                transacao.tipo,
+                json.dumps(transacao.jogos, ensure_ascii=False),
+                transacao.valor,
+                transacao.valor_pago,
+                transacao.data,
+                transacao.compra_id,
+            ),
+        )
+        self.conexao.commit()
+        return transacao
 
-        id_transacao = input("Digite o ID da transação: ").strip()
+    def listar(self):
+        linhas = self.conexao.execute(
+            "SELECT id, usuario_email, tipo, jogos, valor, valor_pago, data, compra_id FROM transacoes ORDER BY data DESC"
+        ).fetchall()
+        return [Transacao.from_row(linha) for linha in linhas]
 
-        transacao = self.buscar_por_id(id_transacao)
+    def listar_por_usuario(self, usuario_email):
+        linhas = self.conexao.execute(
+            "SELECT id, usuario_email, tipo, jogos, valor, valor_pago, data, compra_id FROM transacoes WHERE usuario_email = ? ORDER BY data DESC",
+            (usuario_email,),
+        ).fetchall()
+        return [Transacao.from_row(linha) for linha in linhas]
 
-        if transacao is None:
-            print("Transação não encontrada.")
-            return
+    def buscar_por_id(self, id):
+        linha = self.conexao.execute(
+            "SELECT id, usuario_email, tipo, jogos, valor, valor_pago, data, compra_id FROM transacoes WHERE id = ?",
+            (id,),
+        ).fetchone()
+        return Transacao.from_row(linha)
 
-        self.__transacoes.remove(transacao)
-        self.salvar_dados()
-
-    print("Transação removida com sucesso.")
+    def excluir(self, id):
+        self.conexao.execute("DELETE FROM transacoes WHERE id = ?", (id,))
+        self.conexao.commit()
 

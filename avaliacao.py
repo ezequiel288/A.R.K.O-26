@@ -1,74 +1,64 @@
-import os
-import time
-
 class Avaliacao:
-
-    def __init__(self, avaliacao):
-        self.__avaliacao = avaliacao
+    def __init__(self, usuario_email, jogo_id, nota, data, id=None):
+        self.id = id
+        self.usuario_email = usuario_email
+        self.jogo_id = jogo_id
+        self.nota = nota
+        self.data = data
 
     @classmethod
-    def cadastrar(cls):
-        print("\n=== CADASTRAR AVALIAÇÃO ===")
-
-        avaliacao = input("Digite sua avaliação (0 a 5): ")
-
-        return cls(avaliacao)
-
-    def get_avaliacao(self):
-        return self.__avaliacao
-
-    def set_avaliacao(self, avaliacao):
-        if avaliacao.strip() != "":
-            self.__avaliacao = avaliacao
-        else:
-            print("Avaliação inválida.")
-
-    def alterar(self):
-        print("\n=== ALTERAR AVALIAÇÃO ===")
-
-        nova_avaliacao = input("Nova avaliação (ENTER para manter): ")
-
-        if nova_avaliacao != "":
-            self.set_avaliacao(nova_avaliacao)
-
-        print("Avaliação alterada com sucesso.")
+    def from_row(cls, row):
+        if row is None:
+            return None
+        return cls(
+            row["usuario_email"],
+            row["jogo_id"],
+            row["nota"],
+            row["data"],
+            row["id"],
+        )
 
     def exibir_dados(self):
-        return f"Minha avaliação: {self.__avaliacao}"
+        return f"Usuário: {self.usuario_email} | Jogo: {self.jogo_id} | Nota: {self.nota}"
 
     def __str__(self):
         return self.exibir_dados()
 
-    @staticmethod
-    def listar(lista_avaliacoes):
-        """
-        Lista todas as avaliações cadastradas.
-        """
-        print("\n=== LISTAR AVALIAÇÕES ===")
 
-        if len(lista_avaliacoes) == 0:
-            print("Nenhuma avaliação cadastrada.")
-            return
+class AvaliacaoRepositorio:
+    def __init__(self, banco):
+        self.conexao = banco.conexao
 
-        for avaliacao in lista_avaliacoes:
-            print(avaliacao)
+    def inserir(self, avaliacao):
+        cursor = self.conexao.execute(
+            "INSERT INTO avaliacoes (usuario_email, jogo_id, nota, data) VALUES (?, ?, ?, ?)",
+            (avaliacao.usuario_email, avaliacao.jogo_id, avaliacao.nota, avaliacao.data),
+        )
+        self.conexao.commit()
+        avaliacao.id = cursor.lastrowid
+        return avaliacao
 
-    def remover_avaliacao(self):
-        """
-        Remove uma avaliação.
-        """
+    def listar(self):
+        linhas = self.conexao.execute(
+            "SELECT id, usuario_email, jogo_id, nota, data FROM avaliacoes ORDER BY data DESC"
+        ).fetchall()
+        return [Avaliacao.from_row(linha) for linha in linhas]
 
-        print("\n=== REMOVER AVALIAÇÃO ===")
+    def buscar_por_usuario_e_jogo(self, usuario_email, jogo_id):
+        linha = self.conexao.execute(
+            "SELECT id, usuario_email, jogo_id, nota, data FROM avaliacoes WHERE usuario_email = ? AND jogo_id = ?",
+            (usuario_email, jogo_id),
+        ).fetchone()
+        return Avaliacao.from_row(linha)
 
-        id_avaliacao = input("Digite o ID da avaliação: ").strip()
+    def atualizar(self, avaliacao):
+        self.conexao.execute(
+            "UPDATE avaliacoes SET nota = ?, data = ? WHERE id = ?",
+            (avaliacao.nota, avaliacao.data, avaliacao.id),
+        )
+        self.conexao.commit()
+        return avaliacao
 
-        avaliacao = self.buscar_por_id(id_avaliacao)
-
-        if avaliacao is None:
-            print("Avaliação não encontrada.")
-            return
-
-        self.__avaliacoes.remove(avaliacao)
-        self.salvar_dados()
-
-    print("Avaliação removida com sucesso.")
+    def excluir(self, id):
+        self.conexao.execute("DELETE FROM avaliacoes WHERE id = ?", (id,))
+        self.conexao.commit()
