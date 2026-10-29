@@ -34,7 +34,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont, QPainter, QPixmap
-from ARKO import Ui_MainWindow
+from PyQt6.uic import loadUiType
 from database import BancoDeDados
 from usuario import Usuario, UsuarioRepositorio
 from jogo import Jogo, JogoRepositorio
@@ -45,6 +45,13 @@ from carrinho import Carrinho, CarrinhoRepositorio
 from transacao import Transacao, TransacaoRepositorio
 
 
+Ui_MainWindowBase, _ = loadUiType(str(Path(__file__).resolve().parent / "main.ui"))
+
+
+class Ui_MainWindow(Ui_MainWindowBase):
+    pass
+
+
 class MainWindow(QMainWindow):
     PASSWORD_HASH_ITERATIONS = 600_000
     BUILTIN_GAMES = (
@@ -53,21 +60,49 @@ class MainWindow(QMainWindow):
             "descricao": "Aventura de mundo aberto com narrativa intensa, liberdade total e cenários enormes.",
             "preco": 314.30,
             "empresa": "Rockstar Games",
-            "desconto": 0.10,
+            "desconto": 0.30,
         },
         {
             "titulo": "Marvel's Spider-Man",
             "descricao": "Além de salvar a cidade, você combina ação, parkour e grandes batalhas contra vilões.",
             "preco": 87.40,
             "empresa": "Insomniac Games",
-            "desconto": 0.18,
+            "desconto": 0.65,
         },
         {
             "titulo": "Minecraft",
             "descricao": "Construção criativa, sobrevivência e exploração em um mundo infinito.",
             "preco": 59.40,
             "empresa": "Mojang Studios",
-            "desconto": 0.20,
+            "desconto": 0.40,
+        },
+        {
+            "titulo": "Hollow Knight",
+            "descricao": "Exploração intensa, combatentes desafiadores e um mundo melancólico em pixel art.",
+            "preco": 59.40,
+            "empresa": "Team Cherry",
+            "desconto": 0.40,
+        },
+        {
+            "titulo": "SHADOW",
+            "descricao": "Aventura furtiva com foco em ação estratégica, exploração e combate intenso.",
+            "preco": 23.49,
+            "empresa": "Shadow Studio",
+            "desconto": 0.50,
+        },
+        {
+            "titulo": "Zelda",
+            "descricao": "Uma jornada épica em um mundo aberto cheio de mistérios, criaturas e desafios.",
+            "preco": 28.72,
+            "empresa": "Nintendo",
+            "desconto": 0.75,
+        },
+        {
+            "titulo": "Resident Evil 4",
+            "descricao": "Ação cinematográfica, survival horror e tensão constante em um mundo ameaçador.",
+            "preco": 39.67,
+            "empresa": "Capcom",
+            "desconto": 0.86,
         },
     )
 
@@ -85,6 +120,76 @@ class MainWindow(QMainWindow):
 
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+
+        self._apply_window_images()
+
+        if not hasattr(self.ui, "BemVindo"):
+            self.ui.BemVindo = QLabel(parent=self.ui.Barra1)
+            self.ui.BemVindo.setObjectName("BemVindo")
+            self.ui.BemVindo.setGeometry(130, 180, 1181, 641)
+            self.ui.BemVindo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.ui.BemVindo.setStyleSheet(
+                "QLabel { color: #FFFFFF; background: transparent; font-weight: bold; }"
+            )
+            self.ui.BemVindo.setText("Bem vindo(a) a A.R.K.O!")
+            self.ui.BemVindo.hide()
+
+        if not hasattr(self.ui, "jogos"):
+            self.ui.jogos = (
+                self.ui.SELgta6,
+                self.ui.GTA6_2,
+                self.ui.ComprarBT,
+                self.ui.Preco,
+                self.ui.Desconto,
+                self.ui.SELMspider,
+                self.ui.Mspider,
+                self.ui.ComprarBT_2,
+                self.ui.Preco_2,
+                self.ui.Desconto_2,
+                self.ui.SELMinecraft,
+                self.ui.Minecraft,
+                self.ui.ComprarBT_3,
+                self.ui.Preco_3,
+                self.ui.Desconto_3,
+                self.ui.SELMinecraft_2,
+                self.ui.Hollow,
+                self.ui.ComprarBT_4,
+                self.ui.Preco_4,
+                self.ui.Desconto_4,
+                self.ui.SELMinecraft_3,
+                self.ui.SHADOW,
+                self.ui.ComprarBT_5,
+                self.ui.Preco_5,
+                self.ui.Desconto_5,
+                self.ui.SELMinecraft_4,
+                self.ui.Zelda,
+                self.ui.ComprarBT_7,
+                self.ui.Preco_7,
+                self.ui.Desconto_7,
+                self.ui.SELMinecraft_5,
+                self.ui.Resident,
+                self.ui.ComprarBT_8,
+                self.ui.Preco_8,
+                self.ui.Desconto_8,
+            )
+
+        if not hasattr(self.ui, "ContadorCarrinho"):
+            self.ui.ContadorCarrinho = QLabel(parent=self.ui.Barra1)
+            self.ui.ContadorCarrinho.setObjectName("ContadorCarrinho")
+            self.ui.ContadorCarrinho.setGeometry(1670, 108, 25, 25)
+            self.ui.ContadorCarrinho.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.ui.ContadorCarrinho.setStyleSheet(
+                "QLabel {"
+                "background-color: #00FF00;"
+                "color: black;"
+                "border: 1px solid #FFFFFF;"
+                "border-radius: 12px;"
+                "font-weight: bold;"
+                "}"
+            )
+            self.ui.ContadorCarrinho.setText("0")
+            self.ui.ContadorCarrinho.hide()
+
         self._current_user_email = None
         self._migrate_legacy_data()
         self._setup_registration_tab()
@@ -109,6 +214,12 @@ class MainWindow(QMainWindow):
         self.ui.Conta.clicked.connect(self.show_account)
         self.ui.HOME.clicked.connect(self.show_welcome)
         self.ui.ComprarCarrinho.clicked.connect(self.purchase_cart)
+        self._content_panels = [
+            self.ui.BemVindo,
+            self._account_tabs,
+            self._friends_panel,
+            self._library_panel,
+        ]
         self._update_cart_badge()
         self._show_page("welcome")
         self._base_geometries = {
@@ -129,6 +240,58 @@ class MainWindow(QMainWindow):
             self._base_geometries[title] = title.geometry()
             self._base_fonts[title] = title.font()
         self.setWindowState(Qt.WindowState.WindowMaximized)
+
+    def _apply_window_images(self):
+        image_map = {
+            "Logo": "WhatsApp Image 2026-10-01 at 15.10.22 (1).jpeg",
+            "GTA6_2": "images.jfif",
+            "Mspider": "images (68).jpg",
+            "Minecraft": "js.png",
+        }
+        images_dir = Path(__file__).resolve().parent / "imagens"
+        if not images_dir.exists():
+            return
+
+        for attr_name, filename in image_map.items():
+            label = getattr(self.ui, attr_name, None)
+            if label is None or not isinstance(label, QLabel):
+                continue
+            candidate = images_dir / filename
+            if not candidate.exists():
+                continue
+            pixmap = QPixmap(str(candidate))
+            if pixmap.isNull():
+                continue
+            label.setPixmap(
+                pixmap.scaled(
+                    label.size(),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+            label.setText("")
+
+    def _apply_standard_panel_size(self, widget, width_ratio=0.76, height_ratio=0.72, top_ratio=0.16):
+        if widget is None or not isinstance(widget, QWidget):
+            return
+        parent_rect = (widget.parent() or self.ui.Barra1).geometry()
+        if parent_rect.width() <= 0 or parent_rect.height() <= 0:
+            return
+
+        width = max(760, int(parent_rect.width() * width_ratio))
+        height = max(420, int(parent_rect.height() * height_ratio))
+        x = max(50, int((parent_rect.width() - width) / 2))
+        y = max(50, int(parent_rect.height() * top_ratio))
+
+        widget.setGeometry(x, y, width, height)
+
+    def _sync_all_panels_to_store(self):
+        if not hasattr(self, "_store_store_widget"):
+            return
+        store_rect = self._store_store_widget.geometry()
+        for panel in (self.ui.BemVindo, self._account_tabs, self._friends_panel, self._library_panel):
+            if panel is not None:
+                panel.setGeometry(store_rect)
 
     def _build_cover_pixmap(self, title, color="#111111", accent="#00FF00"):
         pixmap = QPixmap(161, 221)
@@ -216,84 +379,28 @@ class MainWindow(QMainWindow):
         return self._build_cover_pixmap(game_title, fallback_color)
 
     def _build_store_cards(self):
-        cards = []
-        colors = [
-            "#111111", "#1B1B1B", "#0F172A", "#1F2937", "#332200", "#1E1B4B",
-            "#0B132B", "#2D160C", "#111827", "#0F2A2A", "#2A120C", "#101827",
+        store_widgets = [
+            (self.ui.GTA6_2, self.ui.ComprarBT, self.ui.Preco, self.ui.Desconto),
+            (self.ui.Mspider, self.ui.ComprarBT_2, self.ui.Preco_2, self.ui.Desconto_2),
+            (self.ui.Minecraft, self.ui.ComprarBT_3, self.ui.Preco_3, self.ui.Desconto_3),
+            (self.ui.Hollow, self.ui.ComprarBT_4, self.ui.Preco_4, self.ui.Desconto_4),
+            (self.ui.SHADOW, self.ui.ComprarBT_5, self.ui.Preco_5, self.ui.Desconto_5),
+            (self.ui.Zelda, self.ui.ComprarBT_7, self.ui.Preco_7, self.ui.Desconto_7),
+            (self.ui.Resident, self.ui.ComprarBT_8, self.ui.Preco_8, self.ui.Desconto_8),
         ]
 
-        if not hasattr(self, "_store_store_widget"):
-            self._store_store_widget = QWidget(self.ui.scrollAreaWidgetContents)
-            self._store_store_widget.setObjectName("StoreGridContainer")
-            self._store_layout = QGridLayout(self._store_store_widget)
-            self._store_layout.setContentsMargins(8, 8, 8, 8)
-            self._store_layout.setHorizontalSpacing(18)
-            self._store_layout.setVerticalSpacing(24)
-            self._store_store_widget.setStyleSheet("QWidget#StoreGridContainer { background: transparent; }")
-
-        self._store_layout.setContentsMargins(12, 12, 12, 12)
-        self._store_layout.setSpacing(18)
-
         for index, game in enumerate(self.BUILTIN_GAMES):
-            card = QFrame(self._store_store_widget)
-            card.setFixedSize(190, 330)
-            card.setStyleSheet(
-                "QFrame { background-color: #121212; color: white; border: 2px solid #FFFFFF; border-radius: 12px; }"
-            )
+            cover, buy_button, price_label, discount_label = store_widgets[index]
+            cover.setStyleSheet("background-color: transparent; border: none;")
+            buy_button.setText("Adicionar ao carrinho")
+            buy_button.setVisible(True)
+            price_label.setText(f"R$ {game['preco']:.2f}".replace('.', ','))
+            discount_label.setText(f"-{int(game['desconto'] * 100)}%")
 
-            cover = QLabel(card)
-            cover.setPixmap(self._load_store_cover(game["titulo"], colors[index % len(colors)]))
-            cover.setScaledContents(True)
-            cover.setFixedSize(160, 200)
-            cover.move(15, 10)
-
-            title = QLabel(game["titulo"], card)
-            title.setWordWrap(True)
-            title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            title.setStyleSheet("QLabel { color: white; font-weight: bold; font-size: 11px; }")
-            title.setGeometry(10, 215, 170, 42)
-
-            price = QLabel(f"R$ {game['preco']:.2f}".replace('.', ','), card)
-            price.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            price.setStyleSheet("QLabel { background-color: #00FF00; color: black; border-radius: 8px; font-weight: bold; padding: 2px; }")
-            price.setFixedSize(80, 24)
-            price.move(15, 260)
-
-            discount = QLabel(
-                "GRÁTIS" if float(game["desconto"]) >= 1 else f"-{int(float(game['desconto']) * 100)}%",
-                card,
-            )
-            discount.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            discount.setStyleSheet("QLabel { background-color: #FFFFFF; color: black; border-radius: 8px; font-weight: bold; padding: 2px; }")
-            discount.setFixedSize(68, 24)
-            discount.move(105, 260)
-
-            library_button = QPushButton("Biblioteca", card)
-            library_button.setStyleSheet(
-                "QPushButton { background-color: #00FF00; color: black; border: 2px solid #00FF00; border-radius: 10px; font-weight: bold; }"
-            )
-            library_button.setGeometry(15, 290, 160, 28)
-            library_button.hide()
-
-            buy_button = QPushButton("Adicionar ao carrinho", card)
-            buy_button.setStyleSheet(
-                "QPushButton { background-color: #FFFFFF; color: black; border: 2px solid #FFFFFF; border-radius: 10px; font-weight: bold; }"
-                "QPushButton:hover { background-color: #000000; color: white; }"
-            )
-            buy_button.setGeometry(15, 290, 160, 28)
-
-            row, col = divmod(index, 5)
-            self._store_layout.addWidget(card, row, col)
-            cards.append((cover, title, library_button, buy_button, price, discount))
-
-        self._store_store_widget.setMinimumSize(
-            max(950, self._store_layout.sizeHint().width() + 40),
-            max(560, self._store_layout.sizeHint().height() + 80),
+        return tuple(
+            (cover, cover, None, buy_button, price_label, discount_label)
+            for cover, buy_button, price_label, discount_label in store_widgets
         )
-        self._store_store_widget.move(0, 0)
-        self.ui.scrollAreaWidgetContents.setMinimumHeight(self._store_store_widget.height() + 40)
-        self._store_store_widget.hide()
-        return tuple(cards)
 
     def _show_page(self, page):
         self.ui.BemVindo.hide()
@@ -309,17 +416,28 @@ class MainWindow(QMainWindow):
         self.ui.ComprarCarrinho.hide()
 
         if page == "welcome":
-            self.ui.BemVindo.setText("Bem vindo(a) a A.R.K.O!")
+            self.ui.BemVindo.setText("Bem-vindo(a) a A.R.K.O!")
+            self.ui.BemVindo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.ui.BemVindo.setStyleSheet(
+                "QLabel { color: #FFFFFF; background: transparent; font-weight: bold; font-size: 28px; }"
+            )
+            if hasattr(self, "_store_store_widget"):
+                self.ui.BemVindo.setGeometry(self._store_store_widget.geometry())
             self.ui.BemVindo.show()
         elif page == "store":
             for widget in self.ui.jogos:
                 widget.show()
+            if hasattr(self, "_store_store_widget"):
+                self._store_store_widget.hide()
         elif page == "library":
             self._refresh_library()
+            if hasattr(self, "_library_panel"):
+                self._library_panel.setGeometry(130, 180, 1181, 641)
             self._library_panel.show()
         elif page == "cart":
             if not self._cart_games:
                 self.ui.BemVindo.setText("Seu carrinho está vazio.")
+                self.ui.BemVindo.setGeometry(130, 180, 1181, 641)
                 self.ui.BemVindo.show()
             else:
                 for index in sorted(self._cart_games):
@@ -329,8 +447,12 @@ class MainWindow(QMainWindow):
                         widget.show()
                 self.ui.ComprarCarrinho.show()
         elif page == "registration":
+            if hasattr(self, "_account_tabs"):
+                self._account_tabs.setGeometry(130, 180, 1181, 641)
             self._account_tabs.show()
         elif page == "friends":
+            if hasattr(self, "_friends_panel"):
+                self._friends_panel.setGeometry(130, 180, 1181, 641)
             self._friends_panel.show()
 
         self._active_page = page
@@ -2191,33 +2313,40 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
 
-        if not hasattr(self, "_base_geometries"):
-            return
+        if hasattr(self, "_base_geometries"):
+            central_size = self.ui.centralwidget.size()
+            base_scroll_area = self._base_geometries[self.ui.scrollArea]
+            scale_x = central_size.width() / base_scroll_area.width()
+            scale_y = central_size.height() / base_scroll_area.height()
+            font_scale = min(scale_x, scale_y)
+            self.ui.scrollArea.setGeometry(0, 0, central_size.width(), central_size.height())
 
-        central_size = self.ui.centralwidget.size()
-        base_scroll_area = self._base_geometries[self.ui.scrollArea]
-        scale_x = central_size.width() / base_scroll_area.width()
-        scale_y = central_size.height() / base_scroll_area.height()
-        font_scale = min(scale_x, scale_y)
-        self.ui.scrollArea.setGeometry(0, 0, central_size.width(), central_size.height())
+            for widget, geometry in self._base_geometries.items():
+                if widget is self.ui.scrollArea:
+                    continue
+                widget.setGeometry(
+                    round(geometry.x() * scale_x),
+                    round(geometry.y() * scale_y),
+                    round(geometry.width() * scale_x),
+                    round(geometry.height() * scale_y),
+                )
+                font = self._base_fonts[widget]
+                point_size = font.pointSizeF()
+                if point_size > 0:
+                    font.setPointSizeF(point_size * font_scale)
+                    widget.setFont(font)
+                elif font.pixelSize() > 0:
+                    font.setPixelSize(max(1, round(font.pixelSize() * font_scale)))
+                    widget.setFont(font)
 
-        for widget, geometry in self._base_geometries.items():
-            if widget is self.ui.scrollArea:
+        for panel in getattr(self, "_content_panels", []):
+            if panel is self.ui.BemVindo:
+                if hasattr(self, "_store_store_widget"):
+                    panel.setGeometry(self._store_store_widget.geometry())
                 continue
-            widget.setGeometry(
-                round(geometry.x() * scale_x),
-                round(geometry.y() * scale_y),
-                round(geometry.width() * scale_x),
-                round(geometry.height() * scale_y),
-            )
-            font = self._base_fonts[widget]
-            point_size = font.pointSizeF()
-            if point_size > 0:
-                font.setPointSizeF(point_size * font_scale)
-                widget.setFont(font)
-            elif font.pixelSize() > 0:
-                font.setPixelSize(max(1, round(font.pixelSize() * font_scale)))
-                widget.setFont(font)
+            if panel is not None:
+                self._apply_standard_panel_size(panel)
+        self._sync_all_panels_to_store()
 
 
 def main():
