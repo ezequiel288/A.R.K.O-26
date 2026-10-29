@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1350</width>
+    <width>1901</width>
     <height>890</height>
    </rect>
   </property>
@@ -19,7 +19,7 @@
      <rect>
       <x>10</x>
       <y>10</y>
-      <width>1331</width>
+      <width>1881</width>
       <height>831</height>
      </rect>
     </property>
@@ -31,7 +31,7 @@
       <rect>
        <x>0</x>
        <y>0</y>
-       <width>1329</width>
+       <width>1879</width>
        <height>829</height>
       </rect>
      </property>
@@ -40,7 +40,7 @@
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>1321</width>
+        <width>1871</width>
         <height>821</height>
        </rect>
       </property>
@@ -129,7 +129,7 @@ QPushButton:hover {
         <rect>
          <x>130</x>
          <y>10</y>
-         <width>1181</width>
+         <width>1741</width>
          <height>171</height>
         </rect>
        </property>
@@ -312,7 +312,7 @@ QPushButton:hover {
         <rect>
          <x>130</x>
          <y>180</y>
-         <width>1181</width>
+         <width>1741</width>
          <height>641</height>
         </rect>
        </property>
@@ -503,7 +503,7 @@ QPushButton:hover {
 }</string>
        </property>
        <property name="text">
-         <string>Adicionar ao carrinho</string>
+        <string>Adicionar ao carrinho</string>
        </property>
       </widget>
       <widget class="QPushButton" name="Preco">
@@ -558,7 +558,7 @@ QPushButton:hover {
 }</string>
        </property>
        <property name="text">
-         <string>Adicionar ao carrinho</string>
+        <string>Adicionar ao carrinho</string>
        </property>
       </widget>
       <widget class="QPushButton" name="ComprarBT_3">
@@ -584,7 +584,7 @@ QPushButton:hover {
 }</string>
        </property>
        <property name="text">
-         <string>Adicionar ao carrinho</string>
+        <string>Adicionar ao carrinho</string>
        </property>
       </widget>
       <widget class="QPushButton" name="Desconto">
@@ -744,6 +744,9 @@ QPushButton:hover {
          <height>45</height>
         </rect>
        </property>
+       <property name="visible">
+        <bool>false</bool>
+       </property>
        <property name="styleSheet">
         <string notr="true">QPushButton {
     background-color: #00FF00;
@@ -760,35 +763,7 @@ QPushButton:hover {
        <property name="text">
         <string>Comprar</string>
        </property>
-       <property name="visible">
-        <bool>false</bool>
-       </property>
       </widget>
-     </widget>
-     <widget class="QScrollBar" name="Scroll1">
-      <property name="geometry">
-       <rect>
-        <x>1280</x>
-        <y>190</y>
-        <width>20</width>
-        <height>601</height>
-       </rect>
-      </property>
-      <property name="styleSheet">
-       <string notr="true">QScrollBar:vertical {
-    background: #F0F0F0;
-    width: 10px;
-}
-
-QScrollBar::handle:vertical {
-    background: #00FF00;
-    border-radius: 5px;
-}
-</string>
-      </property>
-      <property name="orientation">
-       <enum>Qt::Vertical</enum>
-      </property>
      </widget>
     </widget>
    </widget>
@@ -798,7 +773,7 @@ QScrollBar::handle:vertical {
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1350</width>
+     <width>1901</width>
      <height>21</height>
     </rect>
    </property>
