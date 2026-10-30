@@ -2,6 +2,7 @@
     "titulo": "Resident Evil 4",
     "descricao": "Ação cinematográfica, survival horror e tensão constante em um mundo ameaçador.",
     "preco": 39.67,
+    "preco_ant": 283.36,
     "empresa": "Capcom",
     "desconto": 0.86,
 }

@@ -419,6 +419,41 @@ class MainWindow(QMainWindow):
                 "border: 2px solid #00FF00; border-radius: 10px; "
                 "font-weight: bold;"
             )
+            price_stack = QVBoxLayout()
+            price_stack.setSpacing(2)
+            if game["preco_ant"] > game["preco"]:
+                previous_price_label = QLabel(
+                    f"R$ {game['preco_ant']:.2f}".replace(".", ",")
+                )
+                previous_price_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                previous_price_label.setFixedHeight(15)
+                previous_price_font = previous_price_label.font()
+                previous_price_font.setStrikeOut(True)
+                previous_price_label.setFont(previous_price_font)
+                previous_price_label.setStyleSheet(
+                    "background-color: transparent; color: #AAAAAA; "
+                    "font-size: 10px;"
+                )
+                price_stack.addWidget(previous_price_label)
+            price_stack.addWidget(price_label)
+
+            price_row = QHBoxLayout()
+            price_row.setSpacing(6)
+            discount = float(game["desconto"])
+            if discount > 0:
+                discount_label = QLabel(f"-{discount:.0%}")
+                discount_label.setFixedSize(36, 36)
+                discount_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                discount_label.setToolTip(
+                    f"Desconto de {discount:.0%}"
+                )
+                discount_label.setStyleSheet(
+                    "background-color: #00FF00; color: #000000; "
+                    "border: 1px solid #00FF00; border-radius: 18px; "
+                    "font-size: 9px; font-weight: bold;"
+                )
+                price_row.addWidget(discount_label)
+            price_row.addLayout(price_stack, 1)
 
             cover_label = QLabel()
             cover_label.setFixedSize(161, 155)
@@ -457,7 +492,7 @@ class MainWindow(QMainWindow):
             buy_button.setFixedHeight(31)
             buy_button.setStyleSheet(button_style)
             card_layout.addWidget(buy_button)
-            card_layout.addWidget(price_label)
+            card_layout.addLayout(price_row)
 
             cards.append((card, cover_label, None, buy_button, price_label, None))
             self._store_grid.addWidget(card, index // 5, index % 5)
@@ -1206,6 +1241,7 @@ class MainWindow(QMainWindow):
             ("titulo", str(game["titulo"])),
             ("descricao", str(game["descricao"])),
             ("preco", float(game["preco"])),
+            ("preco_ant", float(game["preco_ant"])),
             ("empresa", str(game["empresa"])),
             ("desconto", float(game["desconto"])),
         )
@@ -1231,9 +1267,15 @@ class MainWindow(QMainWindow):
 
     def _validate_store_game(self, data, source_path):
         required_fields = {"titulo", "descricao", "preco", "empresa", "desconto"}
-        if not isinstance(data, dict) or set(data) != required_fields:
+        allowed_fields = required_fields | {"preco_ant"}
+        if (
+            not isinstance(data, dict)
+            or not required_fields.issubset(data)
+            or not set(data).issubset(allowed_fields)
+        ):
             raise ValueError(
-                "O TXT precisa conter somente titulo, descricao, preco, empresa e desconto."
+                "O TXT precisa conter titulo, descricao, preco, empresa e desconto; "
+                "preco_ant é opcional."
             )
         if not all(
             isinstance(data[field], str) and data[field].strip()
@@ -1247,6 +1289,16 @@ class MainWindow(QMainWindow):
             or data["preco"] < 0
         ):
             raise ValueError("O preço precisa ser um número válido e não negativo.")
+        previous_price = data.get("preco_ant", data["preco"])
+        if (
+            isinstance(previous_price, bool)
+            or not isinstance(previous_price, (int, float))
+            or not math.isfinite(previous_price)
+            or previous_price < data["preco"]
+        ):
+            raise ValueError(
+                "O preço anterior precisa ser um número válido e maior ou igual ao preço atual."
+            )
         if (
             isinstance(data["desconto"], bool)
             or not isinstance(data["desconto"], (int, float))
@@ -1258,6 +1310,7 @@ class MainWindow(QMainWindow):
             "titulo": data["titulo"].strip(),
             "descricao": data["descricao"].strip(),
             "preco": float(data["preco"]),
+            "preco_ant": float(previous_price),
             "empresa": data["empresa"].strip(),
             "desconto": float(data["desconto"]),
             "_catalog_file": source_path,
@@ -1395,6 +1448,10 @@ class MainWindow(QMainWindow):
         price_field.setRange(0, 999999999.99)
         price_field.setDecimals(2)
         price_field.setPrefix("R$ ")
+        previous_price_field = QDoubleSpinBox()
+        previous_price_field.setRange(0, 999999999.99)
+        previous_price_field.setDecimals(2)
+        previous_price_field.setPrefix("R$ ")
         company_field = QLineEdit()
         discount_field = QDoubleSpinBox()
         discount_field.setRange(0, 100)
@@ -1402,7 +1459,8 @@ class MainWindow(QMainWindow):
         discount_field.setSuffix("%")
         form.addRow("Título:", title_field)
         form.addRow("Descrição:", description_field)
-        form.addRow("Preço:", price_field)
+        form.addRow("Preço atual:", price_field)
+        form.addRow("Preço anterior:", previous_price_field)
         form.addRow("Empresa:", company_field)
         form.addRow("Desconto:", discount_field)
 
@@ -1463,6 +1521,7 @@ class MainWindow(QMainWindow):
                 "titulo": title_field.text().strip(),
                 "descricao": description_field.toPlainText().strip(),
                 "preco": price_field.value(),
+                "preco_ant": previous_price_field.value(),
                 "empresa": company_field.text().strip(),
                 "desconto": discount_field.value() / 100,
             }
@@ -1665,6 +1724,7 @@ class MainWindow(QMainWindow):
                             "titulo": game["titulo"],
                             "descricao": game["descricao"],
                             "preco": game["preco"],
+                            "preco_ant": game["preco"],
                             "empresa": game["empresa"],
                             "desconto": 0.0,
                         }
@@ -1685,6 +1745,7 @@ class MainWindow(QMainWindow):
                             "titulo": str(game["titulo"]),
                             "descricao": str(game["descricao"]),
                             "preco": float(game["preco"]),
+                            "preco_ant": float(game["preco"]),
                             "empresa": str(game["empresa"]),
                             "desconto": 0.0,
                         }
@@ -1746,6 +1807,7 @@ class MainWindow(QMainWindow):
                         "titulo": game["titulo"],
                         "descricao": game["descricao"],
                         "preco": game["preco"],
+                        "preco_ant": game["preco_ant"],
                         "empresa": game["empresa"],
                         "capa": str(images[0]) if images else "",
                         "execution_path": execution_path,
@@ -2545,6 +2607,7 @@ class MainWindow(QMainWindow):
                     "titulo": title,
                     "descricao": description,
                     "preco": float(price_field.value()),
+                    "preco_ant": float(price_field.value()),
                     "empresa": company,
                     "desconto": 0.0,
                 }

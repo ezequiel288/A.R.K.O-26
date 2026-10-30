@@ -2,6 +2,7 @@
     "titulo": "Zelda",
     "descricao": "Uma jornada épica em um mundo aberto cheio de mistérios, criaturas e desafios.",
     "preco": 28.72,
+    "preco_ant": 114.88,
     "empresa": "Nintendo",
     "desconto": 0.75,
 }

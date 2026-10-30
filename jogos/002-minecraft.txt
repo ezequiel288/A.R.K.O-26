@@ -2,6 +2,7 @@
     "titulo": "Minecraft",
     "descricao": "Construção criativa, sobrevivência e exploração em um mundo infinito.",
     "preco": 59.40,
+    "preco_ant": 99.00,
     "empresa": "Mojang Studios",
     "desconto": 0.40,
 }

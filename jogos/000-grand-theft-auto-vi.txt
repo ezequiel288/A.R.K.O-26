@@ -2,6 +2,7 @@
     "titulo": "Grand Theft Auto VI",
     "descricao": "Aventura de mundo aberto com narrativa intensa, liberdade total e cenários enormes.",
     "preco": 314.30,
+    "preco_ant": 449.00,
     "empresa": "Rockstar Games",
     "desconto": 0.30,
 }

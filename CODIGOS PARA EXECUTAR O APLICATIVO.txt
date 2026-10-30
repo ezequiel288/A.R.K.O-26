@@ -1,4 +1,10 @@
 INSTALAR O AMBIENTE DE INTERFACE
 pip install PyQt6
+
 EXECUTAR O APP
 python ./main.py
+
+
+SENHA DO ADMINISTRADOR
+adm@gmail.com
+adm123

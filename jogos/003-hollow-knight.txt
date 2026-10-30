@@ -2,6 +2,7 @@
     "titulo": "Hollow Knight",
     "descricao": "Exploração intensa, combatentes desafiadores e um mundo melancólico em pixel art.",
     "preco": 40.0,
+    "preco_ant": 66.67,
     "empresa": "Team Cherry",
     "desconto": 0.40,
 }
