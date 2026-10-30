@@ -1498,9 +1498,10 @@ class MainWindow(QMainWindow):
         def choose_executor():
             selected_path, _ = QFileDialog.getOpenFileName(
                 dialog,
-                "Escolher executável ou atalho do jogo",
+                "Escolher arquivo do jogo",
                 "",
-                "Programas, atalhos e páginas (*.exe *.bat *.cmd *.lnk *.html *.htm)",
+                "Programas, atalhos e páginas (*.exe *.bat *.cmd *.lnk *.html *.htm);;"
+                "Todos os arquivos (*)",
             )
             if selected_path:
                 executor_field.setText(selected_path)
@@ -1549,10 +1550,6 @@ class MainWindow(QMainWindow):
 
             try:
                 executor = self._normalize_launch_target(executor_field.text())
-                if Path(executor).suffix.lower() not in {
-                    ".exe", ".bat", ".cmd", ".lnk", ".html", ".htm"
-                }:
-                    raise ValueError("Escolha .exe, .bat, .cmd, .lnk, .html ou .htm.")
                 cover = Path(image_field.text()).resolve(strict=True)
                 if not cover.is_file() or QPixmap(str(cover)).isNull():
                     raise ValueError("A imagem da capa não é válida.")
@@ -1792,8 +1789,7 @@ class MainWindow(QMainWindow):
                     path
                     for path in executor_directory.iterdir()
                     if path.is_file()
-                    and path.suffix.lower()
-                    in {".exe", ".bat", ".cmd", ".lnk", ".html", ".htm"}
+                    and path.name != "url.txt"
                 ) if executor_directory.is_dir() else []
                 url_path = executor_directory / "url.txt"
                 execution_path = (
@@ -2288,7 +2284,6 @@ class MainWindow(QMainWindow):
     def _launch_store_game(self, game_index):
         game = self.STORE_GAMES[game_index]
         normalized_title = self._normalize_cover_name(game["titulo"])
-        supported_extensions = {".exe", ".bat", ".cmd", ".lnk", ".html", ".htm"}
         try:
             game_executor_directory = (
                 self._store_asset_directory(game) / "executador"
@@ -2298,7 +2293,6 @@ class MainWindow(QMainWindow):
                     file_path
                     for file_path in game_executor_directory.iterdir()
                     if file_path.is_file()
-                    and file_path.suffix.lower() in supported_extensions
                 )
                 if game_executor_directory.is_dir()
                 else []
@@ -2307,7 +2301,6 @@ class MainWindow(QMainWindow):
                 file_path
                 for file_path in self._store_executor_dir.iterdir()
                 if file_path.is_file()
-                and file_path.suffix.lower() in supported_extensions
                 and self._normalize_cover_name(file_path.stem) == normalized_title
             )
         except OSError as error:
@@ -2411,7 +2404,8 @@ class MainWindow(QMainWindow):
                 dialog,
                 "Escolher arquivo para iniciar",
                 "",
-                "Programas, atalhos e páginas (*.exe *.bat *.cmd *.lnk *.html *.htm);;Todos os arquivos (*)",
+                "Programas, atalhos e páginas (*.exe *.bat *.cmd *.lnk *.html *.htm);;"
+                "Todos os arquivos (*)",
             )
             if selected_path:
                 launch_target_field.setText(selected_path)
@@ -2516,18 +2510,6 @@ class MainWindow(QMainWindow):
                     "Escolha um arquivo para iniciar o jogo ou informe um endereço de site.",
                 )
                 return
-            if (
-                not launch_target.lower().startswith(("http://", "https://"))
-                and Path(launch_target).suffix.lower()
-                not in {".exe", ".bat", ".cmd", ".lnk", ".html", ".htm"}
-            ):
-                QMessageBox.warning(
-                    dialog,
-                    "Arquivo incompatível",
-                    "Use um arquivo .exe, .bat, .cmd, .lnk, .html ou .htm.",
-                )
-                return
-
             source_cover = Path(cover_path["value"]) if cover_path["value"] else None
             if (
                 source_cover is None
