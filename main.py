@@ -1,13 +1,16 @@
 import csv
 import hashlib
 import json
+import os
 import secrets
 import shutil
+import sqlite3
 import sys
 import unicodedata
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from PyQt6.QtWidgets import (
     QApplication,
@@ -32,8 +35,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QFont, QPainter, QPixmap
+from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtGui import QColor, QDesktopServices, QFont, QPainter, QPixmap
 from PyQt6.uic import loadUiType
 from database import BancoDeDados
 from usuario import Usuario, UsuarioRepositorio
@@ -79,15 +82,15 @@ class MainWindow(QMainWindow):
         {
             "titulo": "Hollow Knight",
             "descricao": "Exploração intensa, combatentes desafiadores e um mundo melancólico em pixel art.",
-            "preco": 59.40,
+            "preco": 40.00,
             "empresa": "Team Cherry",
             "desconto": 0.40,
         },
         {
-            "titulo": "SHADOW",
-            "descricao": "Aventura furtiva com foco em ação estratégica, exploração e combate intenso.",
-            "preco": 23.49,
-            "empresa": "Shadow Studio",
+            "titulo": "Shadow of the Colossus",
+            "descricao": "Aventura de ação em um mundo vasto, com confrontos contra enormes colossos.",
+            "preco": 30.00,
+            "empresa": "Team Ico",
             "desconto": 0.50,
         },
         {
@@ -109,24 +112,42 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.db = BancoDeDados()
+        self.db = BancoDeDados(perfil="principal")
+        self.avaliacoes_db = BancoDeDados(
+            self.db.arquivo.with_name("avaliacoes.db"),
+            perfil="avaliacoes",
+        )
+        self.biblioteca_db = BancoDeDados(
+            self.db.arquivo.with_name("biblioteca.db"),
+            perfil="biblioteca",
+        )
+        self._migrate_separated_databases()
         self.usuario_repo = UsuarioRepositorio(self.db)
         self.jogo_repo = JogoRepositorio(self.db)
         self.amigo_repo = AmigoRepositorio(self.db)
-        self.avaliacao_repo = AvaliacaoRepositorio(self.db)
-        self.biblioteca_repo = BibliotecaRepositorio(self.db)
+        self.avaliacao_repo = AvaliacaoRepositorio(self.avaliacoes_db)
+        self.biblioteca_repo = BibliotecaRepositorio(self.biblioteca_db)
         self.carrinho_repo = CarrinhoRepositorio(self.db)
         self.transacao_repo = TransacaoRepositorio(self.db)
 
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+        self._store_executor_dir = Path(__file__).resolve().parent / "executador"
+        try:
+            self._store_executor_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            QMessageBox.critical(
+                self,
+                "Pasta de execução indisponível",
+                f"Não foi possível criar a pasta de jogos da Store: {error}",
+            )
 
         self._apply_window_images()
 
         if not hasattr(self.ui, "BemVindo"):
             self.ui.BemVindo = QLabel(parent=self.ui.Barra1)
             self.ui.BemVindo.setObjectName("BemVindo")
-            self.ui.BemVindo.setGeometry(130, 180, 1181, 641)
+            self.ui.BemVindo.setGeometry(self.ui.Menu3.geometry())
             self.ui.BemVindo.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.ui.BemVindo.setStyleSheet(
                 "QLabel { color: #FFFFFF; background: transparent; font-weight: bold; }"
@@ -159,8 +180,8 @@ class MainWindow(QMainWindow):
                 self.ui.SELMinecraft_3,
                 self.ui.SHADOW,
                 self.ui.ComprarBT_5,
-                self.ui.Preco_5,
                 self.ui.Desconto_5,
+                self.ui.Preco_6,
                 self.ui.SELMinecraft_4,
                 self.ui.Zelda,
                 self.ui.ComprarBT_7,
@@ -172,6 +193,12 @@ class MainWindow(QMainWindow):
                 self.ui.Preco_8,
                 self.ui.Desconto_8,
             )
+
+        self._unused_store_widgets = (
+            self.ui.Preco_5,
+            self.ui.ComprarBT_6,
+            self.ui.Desconto_6,
+        )
 
         if not hasattr(self.ui, "ContadorCarrinho"):
             self.ui.ContadorCarrinho = QLabel(parent=self.ui.Barra1)
@@ -194,14 +221,15 @@ class MainWindow(QMainWindow):
         self._migrate_legacy_data()
         self._setup_registration_tab()
         self._setup_friends_page()
+        self._setup_store_page()
         self._game_cards = self._build_store_cards()
-        self._store_game_titles = [card[1] for card in self._game_cards]
         self._cart_games = set()
         self._library_games = set()
         self._load_transactions()
         self._load_reviews()
         self._load_custom_games()
         self._setup_library_page()
+        self._setup_cart_page()
         for index, card in enumerate(self._game_cards):
             card[3].clicked.connect(
                 lambda checked=False, game_index=index: self.add_to_cart(game_index)
@@ -219,6 +247,8 @@ class MainWindow(QMainWindow):
             self._account_tabs,
             self._friends_panel,
             self._library_panel,
+            self._cart_panel,
+            self._store_panel,
         ]
         self._update_cart_badge()
         self._show_page("welcome")
@@ -233,12 +263,7 @@ class MainWindow(QMainWindow):
         self._base_geometries[self._account_tabs] = self._account_tabs.geometry()
         self._base_geometries[self._friends_panel] = self._friends_panel.geometry()
         self._base_geometries[self._library_panel] = self._library_panel.geometry()
-        self._base_fonts = {
-            widget: widget.font() for widget in self._base_geometries
-        }
-        for title in self._store_game_titles:
-            self._base_geometries[title] = title.geometry()
-            self._base_fonts[title] = title.font()
+        self._current_font_scale = 1.0
         self.setWindowState(Qt.WindowState.WindowMaximized)
 
     def _apply_window_images(self):
@@ -271,27 +296,18 @@ class MainWindow(QMainWindow):
             )
             label.setText("")
 
-    def _apply_standard_panel_size(self, widget, width_ratio=0.76, height_ratio=0.72, top_ratio=0.16):
-        if widget is None or not isinstance(widget, QWidget):
-            return
-        parent_rect = (widget.parent() or self.ui.Barra1).geometry()
-        if parent_rect.width() <= 0 or parent_rect.height() <= 0:
-            return
+    def _sync_all_panels_to_main_area(self):
+        main_area_rect = self.ui.Menu3.geometry()
+        for panel in self._content_panels:
+            panel.setGeometry(main_area_rect)
 
-        width = max(760, int(parent_rect.width() * width_ratio))
-        height = max(420, int(parent_rect.height() * height_ratio))
-        x = max(50, int((parent_rect.width() - width) / 2))
-        y = max(50, int(parent_rect.height() * top_ratio))
-
-        widget.setGeometry(x, y, width, height)
-
-    def _sync_all_panels_to_store(self):
-        if not hasattr(self, "_store_store_widget"):
-            return
-        store_rect = self._store_store_widget.geometry()
-        for panel in (self.ui.BemVindo, self._account_tabs, self._friends_panel, self._library_panel):
-            if panel is not None:
-                panel.setGeometry(store_rect)
+    @staticmethod
+    def _set_font_size(widget, point_size, bold=None):
+        font = widget.font()
+        font.setPointSizeF(point_size)
+        if bold is not None:
+            font.setBold(bold)
+        widget.setFont(font)
 
     def _build_cover_pixmap(self, title, color="#111111", accent="#00FF00"):
         pixmap = QPixmap(161, 221)
@@ -378,81 +394,172 @@ class MainWindow(QMainWindow):
                 return pixmap
         return self._build_cover_pixmap(game_title, fallback_color)
 
-    def _build_store_cards(self):
-        store_widgets = [
-            (self.ui.GTA6_2, self.ui.ComprarBT, self.ui.Preco, self.ui.Desconto),
-            (self.ui.Mspider, self.ui.ComprarBT_2, self.ui.Preco_2, self.ui.Desconto_2),
-            (self.ui.Minecraft, self.ui.ComprarBT_3, self.ui.Preco_3, self.ui.Desconto_3),
-            (self.ui.Hollow, self.ui.ComprarBT_4, self.ui.Preco_4, self.ui.Desconto_4),
-            (self.ui.SHADOW, self.ui.ComprarBT_5, self.ui.Preco_5, self.ui.Desconto_5),
-            (self.ui.Zelda, self.ui.ComprarBT_7, self.ui.Preco_7, self.ui.Desconto_7),
-            (self.ui.Resident, self.ui.ComprarBT_8, self.ui.Preco_8, self.ui.Desconto_8),
-        ]
-
-        for index, game in enumerate(self.BUILTIN_GAMES):
-            cover, buy_button, price_label, discount_label = store_widgets[index]
-            cover.setStyleSheet("background-color: transparent; border: none;")
-            buy_button.setText("Adicionar ao carrinho")
-            buy_button.setVisible(True)
-            price_label.setText(f"R$ {game['preco']:.2f}".replace('.', ','))
-            discount_label.setText(f"-{int(game['desconto'] * 100)}%")
-
-        return tuple(
-            (cover, cover, None, buy_button, price_label, discount_label)
-            for cover, buy_button, price_label, discount_label in store_widgets
+    def _setup_store_page(self):
+        self._store_panel = QWidget(parent=self.ui.Barra1)
+        self._store_panel.setObjectName("StorePanel")
+        self._store_panel.setGeometry(self.ui.Menu3.geometry())
+        self._store_panel.setStyleSheet(
+            "QWidget#StorePanel { background-color: #000000; "
+            "color: #FFFFFF; border: 2px solid #FFFFFF; border-radius: 8px; }"
         )
 
+        layout = QVBoxLayout(self._store_panel)
+        layout.setContentsMargins(24, 24, 24, 24)
+        self._store_scroll = QScrollArea(self._store_panel)
+        self._store_scroll.setWidgetResizable(True)
+        self._store_scroll.setStyleSheet(
+            "QScrollArea { background-color: #000000; border: none; }"
+            "QWidget { background-color: #000000; }"
+        )
+        self._store_content = QWidget()
+        self._store_content.setStyleSheet("background-color: #000000;")
+        self._store_grid = QGridLayout(self._store_content)
+        self._store_grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self._store_grid.setContentsMargins(12, 12, 12, 12)
+        self._store_grid.setHorizontalSpacing(24)
+        self._store_grid.setVerticalSpacing(24)
+        self._store_scroll.setWidget(self._store_content)
+        layout.addWidget(self._store_scroll)
+        self._store_panel.hide()
+
+    def _build_store_cards(self):
+        cover_sources = (
+            self.ui.GTA6_2,
+            self.ui.Mspider,
+            self.ui.Minecraft,
+            self.ui.Hollow,
+            self.ui.SHADOW,
+            self.ui.Zelda,
+            self.ui.Resident,
+        )
+        button_style = (
+            "QPushButton { background-color: #00FF00; color: black; "
+            "border: 2px solid #00FF00; border-radius: 8px; "
+            "font-weight: bold; }"
+            "QPushButton:hover { background-color: #FFFFFF; border-color: #FFFFFF; }"
+        )
+        cards = []
+
+        for index, game in enumerate(self.BUILTIN_GAMES):
+            card = QFrame(self._store_content)
+            card.setObjectName("StoreGameCard")
+            card.setFixedSize(201, 370)
+            card.setStyleSheet(
+                "QFrame#StoreGameCard { background-color: #000000; color: #FFFFFF; "
+                "border: 2px solid #FFFFFF; border-radius: 10px; }"
+                "QLabel { background-color: #000000; color: #FFFFFF; border: none; }"
+            )
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(10, 10, 10, 10)
+            card_layout.setSpacing(6)
+
+            price_label = QLabel(f"R$ {game['preco']:.2f}".replace(".", ","))
+            price_label.setFixedHeight(26)
+            price_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            price_label.setStyleSheet(
+                "background-color: #000000; color: #00FF00; "
+                "border: 2px solid #00FF00; border-radius: 10px; "
+                "font-weight: bold;"
+            )
+
+            cover_label = QLabel()
+            cover_label.setFixedSize(161, 155)
+            cover_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            cover_label.setStyleSheet("background-color: #000000;")
+            source_cover = cover_sources[index]
+            cover_path = self._find_store_cover(game["titulo"])
+            if cover_path is not None:
+                pixmap = QPixmap(str(cover_path))
+            else:
+                pixmap = source_cover.pixmap()
+            if pixmap is not None and not pixmap.isNull():
+                cover_label.setPixmap(
+                    pixmap.scaled(
+                        cover_label.size(),
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
+            card_layout.addWidget(cover_label, alignment=Qt.AlignmentFlag.AlignCenter)
+
+            title_label = QLabel(game["titulo"])
+            title_label.setFixedHeight(22)
+            title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            title_label.setToolTip(game["descricao"])
+            title_label.setStyleSheet("font-weight: bold;")
+            card_layout.addWidget(title_label)
+
+            company_label = QLabel(game["empresa"])
+            company_label.setFixedHeight(18)
+            company_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            company_label.setToolTip(f"Empresa: {game['empresa']}")
+            card_layout.addWidget(company_label)
+
+            card_layout.addStretch(1)
+            buy_button = QPushButton("Adicionar ao carrinho")
+            buy_button.setFixedHeight(31)
+            buy_button.setStyleSheet(button_style)
+            card_layout.addWidget(buy_button)
+            card_layout.addWidget(price_label)
+
+            cards.append((card, cover_label, None, buy_button, price_label, None))
+            self._store_grid.addWidget(card, index // 5, index % 5)
+
+        return tuple(cards)
+
+    def _resize_store_cards_to_fill_panel(self):
+        if not hasattr(self, "_game_cards") or not self._game_cards:
+            return
+
+        row_count = (len(self._game_cards) + 4) // 5
+        margins = self._store_grid.contentsMargins()
+        available_height = (
+            self._store_scroll.viewport().height()
+            - margins.top()
+            - margins.bottom()
+            - self._store_grid.verticalSpacing() * (row_count - 1)
+        )
+        card_height = max(370, available_height // row_count)
+        for card, *_ in self._game_cards:
+            card.setFixedHeight(card_height)
+
     def _show_page(self, page):
+        self._sync_all_panels_to_main_area()
         self.ui.BemVindo.hide()
         self._account_tabs.hide()
         self._friends_panel.hide()
         self._library_panel.hide()
-        if hasattr(self, "_store_store_widget"):
-            self._store_store_widget.hide()
+        self._cart_panel.hide()
+        self._store_panel.hide()
         for widget in self.ui.jogos:
             widget.hide()
-        for title in self._store_game_titles:
-            title.hide()
+        for widget in self._unused_store_widgets:
+            widget.hide()
         self.ui.ComprarCarrinho.hide()
 
         if page == "welcome":
             self.ui.BemVindo.setText("Bem-vindo(a) a A.R.K.O!")
             self.ui.BemVindo.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.ui.BemVindo.setStyleSheet(
-                "QLabel { color: #FFFFFF; background: transparent; font-weight: bold; font-size: 28px; }"
+                "QLabel { color: #FFFFFF; background: transparent; font-weight: bold; }"
             )
-            if hasattr(self, "_store_store_widget"):
-                self.ui.BemVindo.setGeometry(self._store_store_widget.geometry())
+            self._set_font_size(self.ui.BemVindo, 21, bold=True)
             self.ui.BemVindo.show()
         elif page == "store":
-            for widget in self.ui.jogos:
-                widget.show()
-            if hasattr(self, "_store_store_widget"):
-                self._store_store_widget.hide()
+            self._resize_store_cards_to_fill_panel()
+            for index, card in enumerate(self._game_cards):
+                card[0].show()
+                self._set_store_cart_button(index)
+            self._store_panel.show()
         elif page == "library":
             self._refresh_library()
-            if hasattr(self, "_library_panel"):
-                self._library_panel.setGeometry(130, 180, 1181, 641)
             self._library_panel.show()
         elif page == "cart":
-            if not self._cart_games:
-                self.ui.BemVindo.setText("Seu carrinho está vazio.")
-                self.ui.BemVindo.setGeometry(130, 180, 1181, 641)
-                self.ui.BemVindo.show()
-            else:
-                for index in sorted(self._cart_games):
-                    for widget in self._game_cards[index]:
-                        if widget is self._game_cards[index][2]:
-                            continue
-                        widget.show()
-                self.ui.ComprarCarrinho.show()
+            self._refresh_cart_page()
+            self._cart_panel.show()
         elif page == "registration":
-            if hasattr(self, "_account_tabs"):
-                self._account_tabs.setGeometry(130, 180, 1181, 641)
             self._account_tabs.show()
         elif page == "friends":
-            if hasattr(self, "_friends_panel"):
-                self._friends_panel.setGeometry(130, 180, 1181, 641)
             self._friends_panel.show()
 
         self._active_page = page
@@ -527,6 +634,48 @@ class MainWindow(QMainWindow):
             except (OSError, json.JSONDecodeError, UnicodeError, ValueError):
                 pass
 
+    def _migrate_separated_databases(self):
+        migration_key = "split_reviews_and_library_v1"
+        migration = self.db.conexao.execute(
+            "SELECT valor FROM app_metadata WHERE chave = ?",
+            (migration_key,),
+        ).fetchone()
+        if migration is not None and migration["valor"] == "done":
+            return
+
+        try:
+            self.db.copiar_tabela_para(
+                self.avaliacoes_db,
+                "avaliacoes",
+                ("id", "usuario_email", "jogo_id", "nota", "data"),
+            )
+            self.db.copiar_tabela_para(
+                self.biblioteca_db,
+                "biblioteca",
+                (
+                    "id",
+                    "usuario_email",
+                    "jogo_id",
+                    "titulo",
+                    "data_adicao",
+                ),
+            )
+            with self.db.conexao:
+                self.db.conexao.execute(
+                    "INSERT OR REPLACE INTO app_metadata (chave, valor) "
+                    "VALUES (?, 'done')",
+                    (migration_key,),
+                )
+        except (OSError, sqlite3.Error, ValueError) as error:
+            QMessageBox.critical(
+                self,
+                "Erro ao organizar os bancos",
+                f"Não foi possível migrar avaliações e biblioteca: {error}",
+            )
+            raise RuntimeError(
+                "Falha na migração dos bancos de avaliações e biblioteca."
+            ) from error
+
     def _load_friends_from_db(self):
         self._friends_list.clear()
         if self._current_user_email is None:
@@ -540,7 +689,7 @@ class MainWindow(QMainWindow):
     def _setup_registration_tab(self):
         self._account_tabs = QTabWidget(parent=self.ui.Barra1)
         self._account_tabs.setObjectName("AccountTabs")
-        self._account_tabs.setGeometry(130, 180, 1181, 641)
+        self._account_tabs.setGeometry(self.ui.Menu3.geometry())
         self._account_tabs.setStyleSheet(
             "QTabWidget::pane { background-color: #000000; "
             "border: 2px solid #FFFFFF; border-radius: 8px; }"
@@ -574,7 +723,8 @@ class MainWindow(QMainWindow):
 
         title = QLabel("Criar conta")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("font-size: 22px; font-weight: bold;")
+        title.setStyleSheet("font-weight: bold;")
+        self._set_font_size(title, 16.5, bold=True)
         card_layout.addWidget(title)
 
         form = QFormLayout()
@@ -587,7 +737,9 @@ class MainWindow(QMainWindow):
         self._registration_password.setEchoMode(QLineEdit.EchoMode.Password)
         form.addRow("Nome:", self._registration_name)
         form.addRow("E-mail:", self._registration_email)
-        form.addRow("Senha:", self._registration_password)
+        self._add_password_visibility_toggle(
+            form, "Senha:", self._registration_password
+        )
         card_layout.addLayout(form)
 
         self._registration_status = QLabel("")
@@ -618,7 +770,8 @@ class MainWindow(QMainWindow):
 
         login_title = QLabel("Entrar na conta")
         login_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        login_title.setStyleSheet("font-size: 22px; font-weight: bold;")
+        login_title.setStyleSheet("font-weight: bold;")
+        self._set_font_size(login_title, 16.5, bold=True)
         login_card_layout.addWidget(login_title)
 
         login_form = QFormLayout()
@@ -628,7 +781,9 @@ class MainWindow(QMainWindow):
         self._login_password.setPlaceholderText("Sua senha")
         self._login_password.setEchoMode(QLineEdit.EchoMode.Password)
         login_form.addRow("E-mail:", self._login_email)
-        login_form.addRow("Senha:", self._login_password)
+        self._add_password_visibility_toggle(
+            login_form, "Senha:", self._login_password
+        )
         login_card_layout.addLayout(login_form)
 
         self._login_status = QLabel("")
@@ -656,8 +811,9 @@ class MainWindow(QMainWindow):
         self._account_welcome.setStyleSheet(
             "background-color: #202020; color: #00FF00; "
             "border: 2px solid #00FF00; border-radius: 10px; "
-            "font-size: 22px; font-weight: bold; padding: 16px;"
+            "font-weight: bold; padding: 16px;"
         )
+        self._set_font_size(self._account_welcome, 16.5, bold=True)
         account_layout.addWidget(self._account_welcome)
 
         account_actions = QHBoxLayout()
@@ -679,12 +835,26 @@ class MainWindow(QMainWindow):
         account_form = QFormLayout()
         self._account_name = QLineEdit()
         self._account_email = QLineEdit()
+        self._account_current_password = QLineEdit()
+        self._account_current_password.setPlaceholderText(
+            "Necessária para redefinir a senha"
+        )
+        self._account_current_password.setEchoMode(QLineEdit.EchoMode.Password)
         self._account_password = QLineEdit()
         self._account_password.setPlaceholderText("Deixe em branco para manter")
         self._account_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self._account_password_confirmation = QLineEdit()
+        self._account_password_confirmation.setPlaceholderText(
+            "Digite novamente a nova senha"
+        )
+        self._account_password_confirmation.setEchoMode(
+            QLineEdit.EchoMode.Password
+        )
         account_form.addRow("Nome:", self._account_name)
         account_form.addRow("E-mail:", self._account_email)
+        account_form.addRow("Senha atual:", self._account_current_password)
         account_form.addRow("Nova senha:", self._account_password)
+        account_form.addRow("Confirmar nova senha:", self._account_password_confirmation)
         account_edit_layout.addLayout(account_form)
 
         self._account_status = QLabel("")
@@ -706,10 +876,34 @@ class MainWindow(QMainWindow):
         self._account_tabs.setTabVisible(2, False)
         self._account_tabs.hide()
 
+    def _add_password_visibility_toggle(self, form, label, password_field):
+        row = QWidget()
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.addWidget(password_field)
+
+        visibility_button = QPushButton("Mostrar")
+        visibility_button.setCheckable(True)
+        visibility_button.setToolTip("Mostrar ou ocultar a senha digitada")
+        visibility_button.toggled.connect(
+            lambda visible: self._set_password_visibility(
+                password_field, visibility_button, visible
+            )
+        )
+        row_layout.addWidget(visibility_button)
+        form.addRow(label, row)
+
+    @staticmethod
+    def _set_password_visibility(password_field, visibility_button, visible):
+        password_field.setEchoMode(
+            QLineEdit.EchoMode.Normal if visible else QLineEdit.EchoMode.Password
+        )
+        visibility_button.setText("Ocultar" if visible else "Mostrar")
+
     def _setup_friends_page(self):
         self._friends_panel = QWidget(parent=self.ui.Barra1)
         self._friends_panel.setObjectName("FriendsPanel")
-        self._friends_panel.setGeometry(130, 180, 1181, 641)
+        self._friends_panel.setGeometry(self.ui.Menu3.geometry())
         self._friends_panel.setStyleSheet(
             "QWidget#FriendsPanel { background-color: #000000; "
             "border: 2px solid #FFFFFF; border-radius: 8px; }"
@@ -729,7 +923,8 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(24, 24, 24, 24)
         title = QLabel("Amigos")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("font-size: 22px; font-weight: bold;")
+        title.setStyleSheet("font-weight: bold;")
+        self._set_font_size(title, 16.5, bold=True)
         layout.addWidget(title)
 
         self._add_friend_button = QPushButton("Adicionar amigo")
@@ -801,7 +996,7 @@ class MainWindow(QMainWindow):
             return
 
         self._show_page("store")
-        search_text = search_text.strip().casefold()
+        search_text = (search_text or "").strip().casefold()
         matches = []
         for index, game in enumerate(self.BUILTIN_GAMES):
             searchable_text = " ".join(
@@ -809,8 +1004,7 @@ class MainWindow(QMainWindow):
             ).casefold()
             is_match = not search_text or search_text in searchable_text
             matches.append(is_match)
-            for widget in self._game_cards[index]:
-                widget.setVisible(is_match)
+            self._game_cards[index][0].setVisible(is_match)
 
         if search_text and not any(matches):
             QMessageBox.information(
@@ -919,6 +1113,16 @@ class MainWindow(QMainWindow):
             )
             return False
 
+    def _transaction_item_matches_game(self, item, game_index):
+        if str(item.get("id")) != str(game_index):
+            return False
+        item_title = item.get("titulo")
+        return (
+            not item_title
+            or str(item_title).casefold()
+            == self.BUILTIN_GAMES[game_index]["titulo"].casefold()
+        )
+
     def _active_purchase_for_game(self, user_email, game_index):
         game_id = str(game_index)
         refunded_purchases = {
@@ -933,7 +1137,10 @@ class MainWindow(QMainWindow):
                 for transaction in reversed(self._transactions)
                 if transaction["tipo"] == "compra"
                 and transaction["usuario"].casefold() == user_email.casefold()
-                and any(item["id"] == game_id for item in transaction["jogos"])
+                and any(
+                    self._transaction_item_matches_game(item, game_index)
+                    for item in transaction["jogos"]
+                )
                 and (transaction["id"], game_id) not in refunded_purchases
             ),
             None,
@@ -954,13 +1161,16 @@ class MainWindow(QMainWindow):
             ):
                 continue
             for game in transaction["jogos"]:
-                if (transaction["id"], game["id"]) not in refunded_purchases:
-                    try:
-                        game_index = int(game["id"])
-                    except ValueError:
-                        continue
-                    if 0 <= game_index < len(self.BUILTIN_GAMES):
-                        game_ids.add(game_index)
+                try:
+                    game_index = int(game["id"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if (
+                    0 <= game_index < len(self.BUILTIN_GAMES)
+                    and self._transaction_item_matches_game(game, game_index)
+                    and (transaction["id"], game["id"]) not in refunded_purchases
+                ):
+                    game_ids.add(game_index)
         self._library_games = game_ids
 
     def _get_user_review(self, user_email, game_index):
@@ -987,6 +1197,7 @@ class MainWindow(QMainWindow):
                     "preco": float(game.preco),
                     "empresa": game.empresa,
                     "capa": game.capa,
+                    "execution_path": game.execution_path,
                 }
                 for game in self.jogo_repo.listar()
             ]
@@ -1001,7 +1212,7 @@ class MainWindow(QMainWindow):
     def _setup_library_page(self):
         self._library_panel = QWidget(parent=self.ui.Barra1)
         self._library_panel.setObjectName("LibraryPanel")
-        self._library_panel.setGeometry(130, 180, 1181, 641)
+        self._library_panel.setGeometry(self.ui.Menu3.geometry())
         self._library_panel.setStyleSheet(
             "QWidget#LibraryPanel { background-color: #000000; "
             "color: #FFFFFF; border: 2px solid #FFFFFF; border-radius: 8px; }"
@@ -1031,6 +1242,125 @@ class MainWindow(QMainWindow):
         self._library_layout.addWidget(self._library_scroll, 0, 0)
         self._library_panel.hide()
 
+    def _setup_cart_page(self):
+        self._cart_panel = QWidget(parent=self.ui.Barra1)
+        self._cart_panel.setObjectName("CartPanel")
+        self._cart_panel.setGeometry(self.ui.Menu3.geometry())
+        self._cart_panel.setStyleSheet(
+            "QWidget#CartPanel { background-color: #000000; color: #FFFFFF; "
+            "border: 2px solid #FFFFFF; border-radius: 8px; }"
+        )
+
+        layout = QVBoxLayout(self._cart_panel)
+        layout.setContentsMargins(24, 24, 24, 16)
+        self._cart_scroll = QScrollArea(self._cart_panel)
+        self._cart_scroll.setWidgetResizable(True)
+        self._cart_scroll.setStyleSheet(
+            "QScrollArea { background-color: #000000; border: none; }"
+            "QWidget { background-color: #000000; }"
+        )
+        self._cart_content = QWidget()
+        self._cart_content.setStyleSheet("background-color: #000000;")
+        self._cart_grid = QGridLayout(self._cart_content)
+        self._cart_grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self._cart_grid.setContentsMargins(8, 8, 8, 8)
+        self._cart_grid.setHorizontalSpacing(20)
+        self._cart_grid.setVerticalSpacing(20)
+        self._cart_scroll.setWidget(self._cart_content)
+        layout.addWidget(self._cart_scroll)
+
+        self._cart_empty_label = QLabel("Seu carrinho está vazio.")
+        self._cart_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._cart_empty_label.setStyleSheet(
+            "color: #FFFFFF; font-weight: bold;"
+        )
+        self._set_font_size(self._cart_empty_label, 15, bold=True)
+        self._cart_grid.addWidget(self._cart_empty_label, 0, 0)
+
+        self._cart_purchase_button = QPushButton("Comprar carrinho")
+        self._cart_purchase_button.setStyleSheet(
+            "QPushButton { background-color: #00FF00; color: black; "
+            "border: 2px solid #00FF00; border-radius: 10px; "
+            "font-weight: bold; padding: 10px 24px; }"
+            "QPushButton:hover { background-color: #FFFFFF; border-color: #FFFFFF; }"
+        )
+        self._cart_purchase_button.clicked.connect(self.purchase_cart)
+        layout.addWidget(self._cart_purchase_button, alignment=Qt.AlignmentFlag.AlignCenter)
+        self._cart_panel.hide()
+        self._cart_card_widgets = []
+
+    def _refresh_cart_page(self):
+        while self._cart_grid.count():
+            item = self._cart_grid.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self._cart_card_widgets.clear()
+
+        if not self._cart_games:
+            self._cart_empty_label = QLabel("Seu carrinho está vazio.")
+            self._cart_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._cart_empty_label.setStyleSheet(
+                "color: #FFFFFF; font-weight: bold;"
+            )
+            self._set_font_size(self._cart_empty_label, 15, bold=True)
+            self._cart_grid.addWidget(self._cart_empty_label, 0, 0)
+            self._cart_purchase_button.hide()
+            return
+
+        self._cart_purchase_button.show()
+        available_width = max(1, self.ui.Menu3.width() - 64)
+        card_width = 201
+        columns = max(1, (available_width + 20) // (card_width + 20))
+
+        for position, game_index in enumerate(sorted(self._cart_games)):
+            game = self.BUILTIN_GAMES[game_index]
+            card = QFrame()
+            card.setObjectName("CartGameCard")
+            card.setFixedSize(card_width, 321)
+            card.setStyleSheet(
+                "QFrame#CartGameCard { background-color: #000000; color: #FFFFFF; "
+                "border: 2px solid #FFFFFF; border-radius: 10px; }"
+                "QLabel { border: none; }"
+            )
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(8, 8, 8, 8)
+            card_layout.setSpacing(4)
+
+            cover_label = QLabel()
+            cover_label.setFixedSize(161, 221)
+            cover_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            pixmap = self._game_cards[game_index][1].pixmap()
+            if pixmap is not None and not pixmap.isNull():
+                cover_label.setPixmap(
+                    pixmap.scaled(
+                        cover_label.size(),
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                )
+            card_layout.addWidget(cover_label, alignment=Qt.AlignmentFlag.AlignCenter)
+
+            name_label = QLabel(game["titulo"])
+            name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            name_label.setWordWrap(True)
+            name_label.setStyleSheet("color: #FFFFFF; font-weight: bold;")
+            name_label.setFixedHeight(28)
+            card_layout.addWidget(name_label)
+
+            price_label = QLabel(f"R$ {game['preco']:.2f}".replace(".", ","))
+            price_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            price_label.setStyleSheet(
+                "color: #00FF00; border: 1px solid #00FF00; "
+                "border-radius: 8px; font-weight: bold; padding: 4px;"
+            )
+            price_label.setFixedHeight(25)
+            card_layout.addWidget(price_label)
+
+            row, column = divmod(position, columns)
+            self._cart_grid.addWidget(card, row, column)
+            self._cart_card_widgets.append(card)
+
     def _create_library_card(
         self,
         title,
@@ -1044,6 +1374,7 @@ class MainWindow(QMainWindow):
         review_rating=None,
         review_callback=None,
         remove_review_callback=None,
+        launch_callback=None,
     ):
         card = QFrame()
         card.setFixedSize(201, 420 if review_callback is not None else 370)
@@ -1100,6 +1431,11 @@ class MainWindow(QMainWindow):
             "border: 2px solid #00FF00; border-radius: 10px; "
             "font-weight: bold; }"
         )
+        if launch_callback is None:
+            play_button.setEnabled(False)
+            play_button.setToolTip("Nenhum arquivo ou link foi configurado.")
+        else:
+            play_button.clicked.connect(launch_callback)
         layout.addWidget(play_button)
 
         price_label = QLabel(f"R$ {price:.2f}".replace(".", ","))
@@ -1231,6 +1567,9 @@ class MainWindow(QMainWindow):
                     user_review["nota"] if user_review is not None else None,
                     review_callback if active_purchase is not None else None,
                     remove_review_callback if user_review is not None else None,
+                    launch_callback=lambda checked=False, game_index=index: self._launch_store_game(
+                        game_index
+                    ),
                 )
             )
 
@@ -1250,6 +1589,9 @@ class MainWindow(QMainWindow):
                         game_index
                     ),
                     "Apagar",
+                    launch_callback=lambda checked=False, game_index=index: self._launch_game(
+                        self._custom_games[game_index].get("execution_path", "")
+                    ),
                 )
             )
 
@@ -1262,10 +1604,7 @@ class MainWindow(QMainWindow):
             "QPushButton:hover { background-color: #808080; color: black; }"
         )
         add_card.setText("+\nAdicionar jogo")
-        add_card.setStyleSheet(
-            add_card.styleSheet()
-            + "QPushButton { font-size: 24px; }"
-        )
+        self._set_font_size(add_card, 18)
         add_card.clicked.connect(
             lambda checked=False: self.open_add_game_dialog()
         )
@@ -1277,6 +1616,102 @@ class MainWindow(QMainWindow):
 
         if self._custom_games_load_error:
             add_card.setEnabled(False)
+
+    def _normalize_launch_target(self, target):
+        target = target.strip()
+        if not target:
+            return ""
+
+        if target.lower().startswith(("http://", "https://")):
+            try:
+                parsed_url = urlsplit(target)
+            except ValueError as error:
+                raise ValueError("O endereço do site não é válido.") from error
+            if parsed_url.scheme.lower() not in {"http", "https"} or not parsed_url.hostname:
+                raise ValueError("Informe um endereço completo começando com http:// ou https://.")
+            return target
+
+        file_path = Path(target).expanduser()
+        if not file_path.is_absolute():
+            file_path = Path(__file__).resolve().parent / file_path
+        try:
+            file_path = file_path.resolve(strict=True)
+        except (OSError, RuntimeError) as error:
+            raise ValueError("O arquivo selecionado não foi encontrado.") from error
+        if not file_path.is_file():
+            raise ValueError("O destino selecionado precisa ser um arquivo.")
+        return str(file_path)
+
+    def _launch_game(self, target):
+        target = str(target or "").strip()
+        if not target:
+            QMessageBox.information(
+                self,
+                "Destino não configurado",
+                "Edite o jogo na Biblioteca e selecione um arquivo ou endereço de site.",
+            )
+            return
+
+        try:
+            if target.lower().startswith(("http://", "https://")):
+                opened = QDesktopServices.openUrl(QUrl(target))
+                if not opened:
+                    raise OSError("O navegador não conseguiu abrir o endereço.")
+            else:
+                file_path = Path(target)
+                if not file_path.is_file():
+                    raise OSError("O arquivo configurado não foi encontrado.")
+                start_file = getattr(os, "startfile", None)
+                if start_file is not None:
+                    start_file(str(file_path))
+                elif not QDesktopServices.openUrl(QUrl.fromLocalFile(str(file_path))):
+                    raise OSError("O sistema não conseguiu abrir o arquivo.")
+        except OSError as error:
+            QMessageBox.critical(
+                self,
+                "Não foi possível iniciar o jogo",
+                f"Falha ao abrir o destino configurado: {error}",
+            )
+
+    def _launch_store_game(self, game_index):
+        game = self.BUILTIN_GAMES[game_index]
+        normalized_title = self._normalize_cover_name(game["titulo"])
+        supported_extensions = {".exe", ".bat", ".cmd", ".lnk", ".html", ".htm"}
+        try:
+            matching_files = sorted(
+                file_path
+                for file_path in self._store_executor_dir.iterdir()
+                if file_path.is_file()
+                and file_path.suffix.lower() in supported_extensions
+                and self._normalize_cover_name(file_path.stem) == normalized_title
+            )
+        except OSError as error:
+            QMessageBox.critical(
+                self,
+                "Erro ao procurar jogo",
+                f"Não foi possível acessar a pasta {self._store_executor_dir}: {error}",
+            )
+            return
+
+        if not matching_files:
+            QMessageBox.information(
+                self,
+                "Arquivo não encontrado",
+                f"Coloque em {self._store_executor_dir} um arquivo chamado "
+                f"“{game['titulo']}” com extensão .exe, .bat, .cmd, .lnk ou .html.",
+            )
+            return
+        if len(matching_files) > 1:
+            file_names = "\n".join(file_path.name for file_path in matching_files)
+            QMessageBox.warning(
+                self,
+                "Mais de um arquivo encontrado",
+                f"Mantenha apenas um arquivo de execução para “{game['titulo']}”:\n"
+                f"{file_names}",
+            )
+            return
+
+        self._launch_game(str(matching_files[0]))
 
     def open_add_game_dialog(
         self,
@@ -1321,16 +1756,41 @@ class MainWindow(QMainWindow):
         price_field.setDecimals(2)
         price_field.setPrefix("R$ ")
         company_field = QLineEdit()
+        launch_target_field = QLineEdit()
+        launch_target_field.setPlaceholderText(
+            "Caminho de arquivo ou URL começando com https:// (opcional)"
+        )
         if editing_game is not None:
             title_field.setText(editing_game["titulo"])
             description_field.setPlainText(editing_game["descricao"])
             price_field.setValue(float(editing_game["preco"]))
             company_field.setText(editing_game["empresa"])
+            launch_target_field.setText(editing_game.get("execution_path", ""))
         form.addRow("Título:", title_field)
         form.addRow("Descrição:", description_field)
         form.addRow("Preço:", price_field)
         form.addRow("Empresa:", company_field)
+
+        launch_target_row = QWidget()
+        launch_target_layout = QHBoxLayout(launch_target_row)
+        launch_target_layout.setContentsMargins(0, 0, 0, 0)
+        launch_target_layout.addWidget(launch_target_field)
+        choose_launch_target_button = QPushButton("Escolher arquivo")
+        launch_target_layout.addWidget(choose_launch_target_button)
+        form.addRow("Arquivo ou site:", launch_target_row)
         layout.addLayout(form)
+
+        def choose_launch_target():
+            selected_path, _ = QFileDialog.getOpenFileName(
+                dialog,
+                "Escolher arquivo para iniciar",
+                "",
+                "Programas, atalhos e páginas (*.exe *.bat *.cmd *.lnk *.html *.htm);;Todos os arquivos (*)",
+            )
+            if selected_path:
+                launch_target_field.setText(selected_path)
+
+        choose_launch_target_button.clicked.connect(choose_launch_target)
 
         cover_path = {"value": ""}
         current_cover = (
@@ -1409,6 +1869,13 @@ class MainWindow(QMainWindow):
             title = title_field.text().strip()
             description = description_field.toPlainText().strip()
             company = company_field.text().strip()
+            try:
+                launch_target = self._normalize_launch_target(
+                    launch_target_field.text()
+                )
+            except ValueError as error:
+                QMessageBox.warning(dialog, "Destino inválido", str(error))
+                return
             if (
                 not title
                 or not description
@@ -1449,10 +1916,18 @@ class MainWindow(QMainWindow):
                 "preco": price_field.value(),
                 "empresa": company,
                 "capa": str(relative_cover),
+                "execution_path": launch_target,
             }
             updated_games = list(self._custom_games)
             if game_index is None:
-                novo_jogo = Jogo(title, description, float(price_field.value()), company, str(relative_cover))
+                novo_jogo = Jogo(
+                    title,
+                    description,
+                    float(price_field.value()),
+                    company,
+                    str(relative_cover),
+                    execution_path=launch_target,
+                )
                 self.jogo_repo.inserir(novo_jogo)
                 updated_games.append({
                     "id": novo_jogo.id,
@@ -1461,6 +1936,7 @@ class MainWindow(QMainWindow):
                     "preco": float(price_field.value()),
                     "empresa": company,
                     "capa": str(relative_cover),
+                    "execution_path": launch_target,
                 })
             else:
                 jogo_db = self.jogo_repo.buscar_por_id(self._custom_games[game_index]["id"])
@@ -1470,6 +1946,7 @@ class MainWindow(QMainWindow):
                     jogo_db.preco = float(price_field.value())
                     jogo_db.empresa = company
                     jogo_db.capa = str(relative_cover)
+                    jogo_db.execution_path = launch_target
                     self.jogo_repo.atualizar(jogo_db)
                 updated_games[game_index] = {
                     "id": self._custom_games[game_index]["id"],
@@ -1478,6 +1955,7 @@ class MainWindow(QMainWindow):
                     "preco": float(price_field.value()),
                     "empresa": company,
                     "capa": str(relative_cover),
+                    "execution_path": launch_target,
                 }
             destination_cover = (
                 Path(__file__).resolve().parent / relative_cover
@@ -1658,7 +2136,10 @@ class MainWindow(QMainWindow):
                 if transaction["tipo"] == "compra"
                 and transaction["usuario"].casefold()
                 == self._current_user_email.casefold()
-                and any(item["id"] == game_id for item in transaction["jogos"])
+                and any(
+                    self._transaction_item_matches_game(item, game_index)
+                    for item in transaction["jogos"]
+                )
                 and (transaction["id"], game_id) not in refunded_purchases
             ),
             None,
@@ -1864,6 +2345,9 @@ class MainWindow(QMainWindow):
 
     def show_account_edit(self):
         self._account_status.clear()
+        self._account_current_password.clear()
+        self._account_password.clear()
+        self._account_password_confirmation.clear()
         self._account_edit_panel.show()
 
     def _activate_account(self, email, name):
@@ -1874,7 +2358,9 @@ class MainWindow(QMainWindow):
         self._account_welcome.setText(f"Bem-vindo: {name}")
         self._account_name.setText(name)
         self._account_email.setText(email)
+        self._account_current_password.clear()
         self._account_password.clear()
+        self._account_password_confirmation.clear()
         self._account_edit_panel.hide()
         self._login_email.clear()
         self._login_password.clear()
@@ -2087,6 +2573,8 @@ class MainWindow(QMainWindow):
         name = self._account_name.text().strip()
         email = self._account_email.text().strip()
         password = self._account_password.text()
+        current_password = self._account_current_password.text()
+        password_confirmation = self._account_password_confirmation.text()
         if not name or not email:
             self._show_account_status("Nome e e-mail não podem ficar vazios.")
             return
@@ -2098,6 +2586,20 @@ class MainWindow(QMainWindow):
             self._show_account_status("Digite um e-mail válido.")
             return
 
+        current_user = self.usuario_repo.buscar_por_email(self._current_user_email)
+        if password:
+            if password_confirmation != password:
+                self._show_account_status("A confirmação da nova senha não corresponde.")
+                return
+            if (
+                current_user is None
+                or not current_user.senha
+                or not self._verify_password(current_password, current_user.senha)[0]
+            ):
+                self._show_account_status("A senha atual está incorreta.")
+                return
+
+        updated_password_hash = self._hash_password(password) if password else None
         users_file = Path(__file__).resolve().parent / "dados" / "usuario.csv"
         try:
             with users_file.open("r", newline="", encoding="utf-8") as file:
@@ -2137,8 +2639,8 @@ class MainWindow(QMainWindow):
 
             account[name_index] = name
             account[email_index] = email
-            if password:
-                account[password_index] = self._hash_password(password)
+            if updated_password_hash:
+                account[password_index] = updated_password_hash
 
             with users_file.open("w", newline="", encoding="utf-8") as file:
                 writer = csv.writer(file)
@@ -2152,15 +2654,18 @@ class MainWindow(QMainWindow):
             )
             return
 
-        current_user = self.usuario_repo.buscar_por_email(self._current_user_email)
         if current_user is not None:
             current_user.nome = name
             current_user.email = email
-            current_user.senha = self._hash_password(password) if password else current_user.senha
+            if updated_password_hash:
+                current_user.senha = updated_password_hash
             self.usuario_repo.atualizar(current_user)
 
         self._current_user_email = email
+        self._account_current_password.clear()
+        self._account_current_password.clear()
         self._account_password.clear()
+        self._account_password_confirmation.clear()
         self.ui.Conta.setText(f"👤 {name}")
         self._account_welcome.setText(f"Bem-vindo: {name}")
         self._account_edit_panel.hide()
@@ -2172,7 +2677,9 @@ class MainWindow(QMainWindow):
         self._friends_list.clear()
         self._account_name.clear()
         self._account_email.clear()
+        self._account_current_password.clear()
         self._account_password.clear()
+        self._account_password_confirmation.clear()
         self._account_status.clear()
         self._login_email.clear()
         self._login_password.clear()
@@ -2192,24 +2699,29 @@ class MainWindow(QMainWindow):
             self._cart_games.add(game_index)
 
         self._update_cart_badge()
+        self._set_store_cart_button(game_index)
+
+        if self._active_page == "cart":
+            self._show_page("cart")
+
+    def _set_store_cart_button(self, game_index):
         button = self._game_cards[game_index][3]
         if game_index in self._cart_games:
             button.setText("Adicionado")
             button.setStyleSheet(
-                "QPushButton { background-color: #00FF00; color: black; "
-                "border: 2px solid #00FF00; border-radius: 10px; font-weight: bold; }"
-            )
-        else:
-            button.setText("Adicionar ao carrinho")
-            button.setStyleSheet(
                 "QPushButton { background-color: #FFFFFF; color: black; "
-                "border: 2px solid #FFFFFF; border-radius: 10px; "
+                "border: 2px solid #FFFFFF; border-radius: 8px; "
                 "font-weight: bold; }"
-                "QPushButton:hover { background-color: #000000; color: white; }"
             )
+            return
 
-        if self._active_page == "cart":
-            self._show_page("cart")
+        button.setText("Adicionar ao carrinho")
+        button.setStyleSheet(
+            "QPushButton { background-color: #00FF00; color: black; "
+            "border: 2px solid #00FF00; border-radius: 8px; "
+            "font-weight: bold; }"
+            "QPushButton:hover { background-color: #FFFFFF; border-color: #FFFFFF; }"
+        )
 
     def _update_cart_badge(self):
         count = len(self._cart_games)
@@ -2318,7 +2830,8 @@ class MainWindow(QMainWindow):
             base_scroll_area = self._base_geometries[self.ui.scrollArea]
             scale_x = central_size.width() / base_scroll_area.width()
             scale_y = central_size.height() / base_scroll_area.height()
-            font_scale = min(scale_x, scale_y)
+            font_scale = max(0.85, min(1.5, min(scale_x, scale_y)))
+            font_scale_delta = font_scale / self._current_font_scale
             self.ui.scrollArea.setGeometry(0, 0, central_size.width(), central_size.height())
 
             for widget, geometry in self._base_geometries.items():
@@ -2330,23 +2843,25 @@ class MainWindow(QMainWindow):
                     round(geometry.width() * scale_x),
                     round(geometry.height() * scale_y),
                 )
-                font = self._base_fonts[widget]
+            for widget in self.findChildren(QWidget):
+                font = widget.font()
                 point_size = font.pointSizeF()
                 if point_size > 0:
-                    font.setPointSizeF(point_size * font_scale)
-                    widget.setFont(font)
+                    font.setPointSizeF(point_size * font_scale_delta)
                 elif font.pixelSize() > 0:
-                    font.setPixelSize(max(1, round(font.pixelSize() * font_scale)))
-                    widget.setFont(font)
+                    font.setPixelSize(
+                        max(1, round(font.pixelSize() * font_scale_delta))
+                    )
+                else:
+                    continue
+                widget.setFont(font)
+            self._current_font_scale = font_scale
 
-        for panel in getattr(self, "_content_panels", []):
-            if panel is self.ui.BemVindo:
-                if hasattr(self, "_store_store_widget"):
-                    panel.setGeometry(self._store_store_widget.geometry())
-                continue
-            if panel is not None:
-                self._apply_standard_panel_size(panel)
-        self._sync_all_panels_to_store()
+        if hasattr(self, "_content_panels"):
+            self._sync_all_panels_to_main_area()
+            self._resize_store_cards_to_fill_panel()
+            if getattr(self, "_active_page", None) == "cart":
+                self._refresh_cart_page()
 
 
 def main():

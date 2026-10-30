@@ -1,0 +1,12 @@
+Execucao dos jogos da Store
+
+Coloque nesta pasta um arquivo de execucao para cada jogo, usando o titulo do
+jogo como nome do arquivo. Exemplos:
+
+  Shadow of the Colossus.html
+  Minecraft.bat
+
+Extensoes aceitas: .exe, .bat, .cmd, .lnk, .html e .htm.
+
+Use apenas um arquivo de execucao para cada jogo. Compre o jogo na Store e, em
+seguida, abra a Biblioteca e clique em "Jogar" no card correspondente.

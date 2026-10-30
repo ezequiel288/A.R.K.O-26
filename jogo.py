@@ -1,11 +1,21 @@
 class Jogo:
-    def __init__(self, titulo, descricao, preco, empresa, capa="", id=None):
+    def __init__(
+        self,
+        titulo,
+        descricao,
+        preco,
+        empresa,
+        capa="",
+        id=None,
+        execution_path="",
+    ):
         self.id = id
         self.titulo = titulo
         self.descricao = descricao
         self.preco = preco
         self.empresa = empresa
         self.capa = capa
+        self.execution_path = execution_path
 
     @classmethod
     def from_row(cls, row):
@@ -18,6 +28,7 @@ class Jogo:
             row["empresa"],
             row["capa"],
             row["id"],
+            row["execution_path"],
         )
 
     def exibir_dados(self):
@@ -37,6 +48,7 @@ class Jogo:
             "preco": self.preco,
             "empresa": self.empresa,
             "capa": self.capa,
+            "execution_path": self.execution_path,
         }
 
 
@@ -46,8 +58,15 @@ class JogoRepositorio:
 
     def inserir(self, jogo):
         cursor = self.conexao.execute(
-            "INSERT INTO jogos (titulo, descricao, preco, empresa, capa) VALUES (?, ?, ?, ?, ?)",
-            (jogo.titulo, jogo.descricao, jogo.preco, jogo.empresa, jogo.capa),
+            "INSERT INTO jogos (titulo, descricao, preco, empresa, capa, execution_path) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                jogo.titulo,
+                jogo.descricao,
+                jogo.preco,
+                jogo.empresa,
+                jogo.capa,
+                jogo.execution_path,
+            ),
         )
         self.conexao.commit()
         jogo.id = cursor.lastrowid
@@ -55,28 +74,36 @@ class JogoRepositorio:
 
     def listar(self):
         linhas = self.conexao.execute(
-            "SELECT id, titulo, descricao, preco, empresa, capa FROM jogos ORDER BY id"
+            "SELECT id, titulo, descricao, preco, empresa, capa, execution_path FROM jogos ORDER BY id"
         ).fetchall()
         return [Jogo.from_row(linha) for linha in linhas]
 
     def buscar_por_id(self, id):
         linha = self.conexao.execute(
-            "SELECT id, titulo, descricao, preco, empresa, capa FROM jogos WHERE id = ?",
+            "SELECT id, titulo, descricao, preco, empresa, capa, execution_path FROM jogos WHERE id = ?",
             (id,),
         ).fetchone()
         return Jogo.from_row(linha)
 
     def buscar_por_titulo(self, titulo):
         linha = self.conexao.execute(
-            "SELECT id, titulo, descricao, preco, empresa, capa FROM jogos WHERE titulo = ?",
+            "SELECT id, titulo, descricao, preco, empresa, capa, execution_path FROM jogos WHERE titulo = ?",
             (titulo,),
         ).fetchone()
         return Jogo.from_row(linha)
 
     def atualizar(self, jogo):
         self.conexao.execute(
-            "UPDATE jogos SET titulo = ?, descricao = ?, preco = ?, empresa = ?, capa = ? WHERE id = ?",
-            (jogo.titulo, jogo.descricao, jogo.preco, jogo.empresa, jogo.capa, jogo.id),
+            "UPDATE jogos SET titulo = ?, descricao = ?, preco = ?, empresa = ?, capa = ?, execution_path = ? WHERE id = ?",
+            (
+                jogo.titulo,
+                jogo.descricao,
+                jogo.preco,
+                jogo.empresa,
+                jogo.capa,
+                jogo.execution_path,
+                jogo.id,
+            ),
         )
         self.conexao.commit()
         return jogo
