@@ -1,0 +1,7 @@
+{
+    "titulo": "Minecraft",
+    "descricao": "Construção criativa, sobrevivência e exploração em um mundo infinito.",
+    "preco": 59.40,
+    "empresa": "Mojang Studios",
+    "desconto": 0.40,
+}

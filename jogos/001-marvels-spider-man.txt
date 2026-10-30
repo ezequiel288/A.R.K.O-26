@@ -1,0 +1,7 @@
+{
+    "titulo": "Marvel's Spider-Man",
+    "descricao": "Além de salvar a cidade, você combina ação, parkour e grandes batalhas contra vilões.",
+    "preco": 87.40,
+    "empresa": "Insomniac Games",
+    "desconto": 0.65,
+}

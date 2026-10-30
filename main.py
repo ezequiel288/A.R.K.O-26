@@ -1,7 +1,10 @@
 import csv
+import ast
 import hashlib
 import json
+import math
 import os
+import re
 import secrets
 import shutil
 import sqlite3
@@ -40,7 +43,6 @@ from PyQt6.QtGui import QColor, QDesktopServices, QFont, QPainter, QPixmap
 from PyQt6.uic import loadUiType
 from database import BancoDeDados
 from usuario import Usuario, UsuarioRepositorio
-from jogo import Jogo, JogoRepositorio
 from amigo import Amigo, AmigoRepositorio
 from avaliacao import Avaliacao, AvaliacaoRepositorio
 from biblioteca import Biblioteca, BibliotecaRepositorio
@@ -57,61 +59,11 @@ class Ui_MainWindow(Ui_MainWindowBase):
 
 class MainWindow(QMainWindow):
     PASSWORD_HASH_ITERATIONS = 600_000
-    BUILTIN_GAMES = (
-        {
-            "titulo": "Grand Theft Auto VI",
-            "descricao": "Aventura de mundo aberto com narrativa intensa, liberdade total e cenários enormes.",
-            "preco": 314.30,
-            "empresa": "Rockstar Games",
-            "desconto": 0.30,
-        },
-        {
-            "titulo": "Marvel's Spider-Man",
-            "descricao": "Além de salvar a cidade, você combina ação, parkour e grandes batalhas contra vilões.",
-            "preco": 87.40,
-            "empresa": "Insomniac Games",
-            "desconto": 0.65,
-        },
-        {
-            "titulo": "Minecraft",
-            "descricao": "Construção criativa, sobrevivência e exploração em um mundo infinito.",
-            "preco": 59.40,
-            "empresa": "Mojang Studios",
-            "desconto": 0.40,
-        },
-        {
-            "titulo": "Hollow Knight",
-            "descricao": "Exploração intensa, combatentes desafiadores e um mundo melancólico em pixel art.",
-            "preco": 40.00,
-            "empresa": "Team Cherry",
-            "desconto": 0.40,
-        },
-        {
-            "titulo": "Shadow of the Colossus",
-            "descricao": "Aventura de ação em um mundo vasto, com confrontos contra enormes colossos.",
-            "preco": 30.00,
-            "empresa": "Team Ico",
-            "desconto": 0.50,
-        },
-        {
-            "titulo": "Zelda",
-            "descricao": "Uma jornada épica em um mundo aberto cheio de mistérios, criaturas e desafios.",
-            "preco": 28.72,
-            "empresa": "Nintendo",
-            "desconto": 0.75,
-        },
-        {
-            "titulo": "Resident Evil 4",
-            "descricao": "Ação cinematográfica, survival horror e tensão constante em um mundo ameaçador.",
-            "preco": 39.67,
-            "empresa": "Capcom",
-            "desconto": 0.86,
-        },
-    )
 
     def __init__(self):
         super().__init__()
 
+        self._games_directory = Path(__file__).resolve().parent / "jogos"
         self.db = BancoDeDados(perfil="principal")
         self.avaliacoes_db = BancoDeDados(
             self.db.arquivo.with_name("avaliacoes.db"),
@@ -123,7 +75,6 @@ class MainWindow(QMainWindow):
         )
         self._migrate_separated_databases()
         self.usuario_repo = UsuarioRepositorio(self.db)
-        self.jogo_repo = JogoRepositorio(self.db)
         self.amigo_repo = AmigoRepositorio(self.db)
         self.avaliacao_repo = AvaliacaoRepositorio(self.avaliacoes_db)
         self.biblioteca_repo = BibliotecaRepositorio(self.biblioteca_db)
@@ -132,6 +83,7 @@ class MainWindow(QMainWindow):
 
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+        self._custom_game_files_error = not self._migrate_custom_game_files()
         self._store_executor_dir = Path(__file__).resolve().parent / "executador"
         try:
             self._store_executor_dir.mkdir(parents=True, exist_ok=True)
@@ -218,7 +170,9 @@ class MainWindow(QMainWindow):
             self.ui.ContadorCarrinho.hide()
 
         self._current_user_email = None
+        self._current_user_name = None
         self._migrate_legacy_data()
+        self.STORE_GAMES = self._load_store_catalog()
         self._setup_registration_tab()
         self._setup_friends_page()
         self._setup_store_page()
@@ -419,19 +373,23 @@ class MainWindow(QMainWindow):
         self._store_grid.setHorizontalSpacing(24)
         self._store_grid.setVerticalSpacing(24)
         self._store_scroll.setWidget(self._store_content)
+        self._add_store_game_button = QPushButton("Adicionar jogo à Store")
+        self._add_store_game_button.hide()
+        self._add_store_game_button.clicked.connect(self.open_add_store_game_dialog)
+        layout.addWidget(self._add_store_game_button)
         layout.addWidget(self._store_scroll)
         self._store_panel.hide()
 
-    def _build_store_cards(self):
-        cover_sources = (
-            self.ui.GTA6_2,
-            self.ui.Mspider,
-            self.ui.Minecraft,
-            self.ui.Hollow,
-            self.ui.SHADOW,
-            self.ui.Zelda,
-            self.ui.Resident,
+    def _is_store_admin(self):
+        return (
+            self._current_user_name is not None
+            and self._current_user_name.strip().casefold() == "administrador"
         )
+
+    def _update_store_admin_controls(self):
+        self._add_store_game_button.setVisible(self._is_store_admin())
+
+    def _build_store_cards(self):
         button_style = (
             "QPushButton { background-color: #00FF00; color: black; "
             "border: 2px solid #00FF00; border-radius: 8px; "
@@ -440,7 +398,7 @@ class MainWindow(QMainWindow):
         )
         cards = []
 
-        for index, game in enumerate(self.BUILTIN_GAMES):
+        for index, game in enumerate(self.STORE_GAMES):
             card = QFrame(self._store_content)
             card.setObjectName("StoreGameCard")
             card.setFixedSize(201, 370)
@@ -466,12 +424,11 @@ class MainWindow(QMainWindow):
             cover_label.setFixedSize(161, 155)
             cover_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             cover_label.setStyleSheet("background-color: #000000;")
-            source_cover = cover_sources[index]
-            cover_path = self._find_store_cover(game["titulo"])
+            cover_path = self._store_game_cover_path(game)
             if cover_path is not None:
                 pixmap = QPixmap(str(cover_path))
             else:
-                pixmap = source_cover.pixmap()
+                pixmap = self._build_cover_pixmap(game["titulo"])
             if pixmap is not None and not pixmap.isNull():
                 cover_label.setPixmap(
                     pixmap.scaled(
@@ -635,46 +592,95 @@ class MainWindow(QMainWindow):
                 pass
 
     def _migrate_separated_databases(self):
-        migration_key = "split_reviews_and_library_v1"
-        migration = self.db.conexao.execute(
-            "SELECT valor FROM app_metadata WHERE chave = ?",
-            (migration_key,),
-        ).fetchone()
-        if migration is not None and migration["valor"] == "done":
-            return
-
         try:
-            self.db.copiar_tabela_para(
-                self.avaliacoes_db,
-                "avaliacoes",
-                ("id", "usuario_email", "jogo_id", "nota", "data"),
-            )
-            self.db.copiar_tabela_para(
-                self.biblioteca_db,
-                "biblioteca",
+            migrations = (
                 (
-                    "id",
-                    "usuario_email",
-                    "jogo_id",
-                    "titulo",
-                    "data_adicao",
+                    "split_reviews_and_library_v1",
+                    (
+                        (
+                            self.avaliacoes_db,
+                            "avaliacoes",
+                            ("id", "usuario_email", "jogo_id", "nota", "data"),
+                        ),
+                        (
+                            self.biblioteca_db,
+                            "biblioteca",
+                            (
+                                "id",
+                                "usuario_email",
+                                "jogo_id",
+                                "titulo",
+                                "data_adicao",
+                            ),
+                        ),
+                    ),
                 ),
             )
-            with self.db.conexao:
-                self.db.conexao.execute(
-                    "INSERT OR REPLACE INTO app_metadata (chave, valor) "
-                    "VALUES (?, 'done')",
+            for migration_key, tables in migrations:
+                migration = self.db.conexao.execute(
+                    "SELECT valor FROM app_metadata WHERE chave = ?",
                     (migration_key,),
-                )
+                ).fetchone()
+                if migration is not None and migration["valor"] == "done":
+                    continue
+
+                for destination, table, columns in tables:
+                    source_exists = self.db.conexao.execute(
+                        "SELECT 1 FROM sqlite_master "
+                        "WHERE type = 'table' AND name = ?",
+                        (table,),
+                    ).fetchone()
+                    if source_exists is None:
+                        continue
+
+                    available_columns = {
+                        row["name"]
+                        for row in self.db.conexao.execute(
+                            f"PRAGMA table_info({table})"
+                        ).fetchall()
+                    }
+                    source_columns = tuple(
+                        column for column in columns if column in available_columns
+                    )
+                    required_columns = {
+                        "avaliacoes": {
+                            "id",
+                            "usuario_email",
+                            "jogo_id",
+                            "nota",
+                            "data",
+                        },
+                        "biblioteca": {
+                            "id",
+                            "usuario_email",
+                            "jogo_id",
+                            "titulo",
+                        },
+                    }[table]
+                    if not required_columns.issubset(source_columns):
+                        raise ValueError(
+                            f"A tabela antiga {table} não possui todas as colunas "
+                            "necessárias para a migração."
+                        )
+                    self.db.copiar_tabela_para(
+                        destination,
+                        table,
+                        source_columns,
+                    )
+
+                with self.db.conexao:
+                    self.db.conexao.execute(
+                        "INSERT OR REPLACE INTO app_metadata (chave, valor) "
+                        "VALUES (?, 'done')",
+                        (migration_key,),
+                    )
         except (OSError, sqlite3.Error, ValueError) as error:
             QMessageBox.critical(
                 self,
                 "Erro ao organizar os bancos",
-                f"Não foi possível migrar avaliações e biblioteca: {error}",
+                f"Não foi possível migrar os dados: {error}",
             )
-            raise RuntimeError(
-                "Falha na migração dos bancos de avaliações e biblioteca."
-            ) from error
+            raise RuntimeError("Falha ao migrar os dados para os novos bancos.") from error
 
     def _load_friends_from_db(self):
         self._friends_list.clear()
@@ -998,7 +1004,7 @@ class MainWindow(QMainWindow):
         self._show_page("store")
         search_text = (search_text or "").strip().casefold()
         matches = []
-        for index, game in enumerate(self.BUILTIN_GAMES):
+        for index, game in enumerate(self.STORE_GAMES):
             searchable_text = " ".join(
                 (game["titulo"], game["descricao"], game["empresa"])
             ).casefold()
@@ -1120,7 +1126,7 @@ class MainWindow(QMainWindow):
         return (
             not item_title
             or str(item_title).casefold()
-            == self.BUILTIN_GAMES[game_index]["titulo"].casefold()
+            == self.STORE_GAMES[game_index]["titulo"].casefold()
         )
 
     def _active_purchase_for_game(self, user_email, game_index):
@@ -1166,7 +1172,7 @@ class MainWindow(QMainWindow):
                 except (KeyError, TypeError, ValueError):
                     continue
                 if (
-                    0 <= game_index < len(self.BUILTIN_GAMES)
+                    0 <= game_index < len(self.STORE_GAMES)
                     and self._transaction_item_matches_game(game, game_index)
                     and (transaction["id"], game["id"]) not in refunded_purchases
                 ):
@@ -1184,24 +1190,568 @@ class MainWindow(QMainWindow):
             None,
         )
 
-    def _load_custom_games(self):
-        self._custom_games_file = Path(__file__).resolve().parent / "dados" / "jogos.json"
-        self._custom_games = []
-        self._custom_games_load_error = False
+    @staticmethod
+    def _store_game_slug(title):
+        normalized = unicodedata.normalize("NFKD", str(title))
+        ascii_title = "".join(
+            character
+            for character in normalized
+            if not unicodedata.combining(character)
+        )
+        slug = re.sub(r"[^a-zA-Z0-9]+", "-", ascii_title).strip("-").lower()
+        return slug or "jogo"
+
+    def _store_game_text(self, game):
+        fields = (
+            ("titulo", str(game["titulo"])),
+            ("descricao", str(game["descricao"])),
+            ("preco", float(game["preco"])),
+            ("empresa", str(game["empresa"])),
+            ("desconto", float(game["desconto"])),
+        )
+        lines = ["{"]
+        for key, value in fields:
+            formatted_value = (
+                json.dumps(value, ensure_ascii=False)
+                if isinstance(value, str)
+                else f"{value:.2f}"
+            )
+            lines.append(f"    {json.dumps(key)}: {formatted_value},")
+        lines.extend(("}", ""))
+        return "\n".join(lines)
+
+    def _write_store_game_txt(self, game, file_path):
+        temporary_path = file_path.with_suffix(file_path.suffix + ".tmp")
         try:
-            self._custom_games = [
-                {
-                    "id": game.id,
-                    "titulo": game.titulo,
-                    "descricao": game.descricao,
-                    "preco": float(game.preco),
-                    "empresa": game.empresa,
-                    "capa": game.capa,
-                    "execution_path": game.execution_path,
+            temporary_path.write_text(self._store_game_text(game), encoding="utf-8")
+            temporary_path.replace(file_path)
+        except OSError:
+            temporary_path.unlink(missing_ok=True)
+            raise
+
+    def _validate_store_game(self, data, source_path):
+        required_fields = {"titulo", "descricao", "preco", "empresa", "desconto"}
+        if not isinstance(data, dict) or set(data) != required_fields:
+            raise ValueError(
+                "O TXT precisa conter somente titulo, descricao, preco, empresa e desconto."
+            )
+        if not all(
+            isinstance(data[field], str) and data[field].strip()
+            for field in ("titulo", "descricao", "empresa")
+        ):
+            raise ValueError("Título, descrição e empresa precisam ser textos preenchidos.")
+        if (
+            isinstance(data["preco"], bool)
+            or not isinstance(data["preco"], (int, float))
+            or not math.isfinite(data["preco"])
+            or data["preco"] < 0
+        ):
+            raise ValueError("O preço precisa ser um número válido e não negativo.")
+        if (
+            isinstance(data["desconto"], bool)
+            or not isinstance(data["desconto"], (int, float))
+            or not math.isfinite(data["desconto"])
+            or not 0 <= data["desconto"] <= 1
+        ):
+            raise ValueError("O desconto precisa estar entre 0 e 1.")
+        return {
+            "titulo": data["titulo"].strip(),
+            "descricao": data["descricao"].strip(),
+            "preco": float(data["preco"]),
+            "empresa": data["empresa"].strip(),
+            "desconto": float(data["desconto"]),
+            "_catalog_file": source_path,
+        }
+
+    def _load_store_catalog(self):
+        self._games_directory.mkdir(parents=True, exist_ok=True)
+        catalog_files = sorted(
+            self._games_directory.glob("*.txt"),
+            key=self._store_catalog_sort_key,
+        )
+        games = []
+        invalid_files = []
+        for file_path in catalog_files:
+            try:
+                data = ast.literal_eval(file_path.read_text(encoding="utf-8"))
+                games.append(self._validate_store_game(data, file_path))
+            except (OSError, SyntaxError, ValueError, TypeError) as error:
+                invalid_files.append(f"{file_path.name}: {error}")
+
+        if invalid_files:
+            QMessageBox.warning(
+                self,
+                "Arquivos de jogos inválidos",
+                "Estes TXT foram ignorados. Corrija-os para exibir os jogos:\n"
+                + "\n".join(invalid_files),
+            )
+        return games
+
+    @staticmethod
+    def _store_catalog_sort_key(path):
+        prefix = path.name.split("-", 1)[0]
+        if prefix.isdigit():
+            return (0, int(prefix), path.name.casefold())
+        return (1, 0, path.name.casefold())
+
+    def _store_asset_directory(self, game):
+        return self._games_directory / Path(game["_catalog_file"]).stem
+
+    def _store_game_cover_path(self, game):
+        image_directory = self._store_asset_directory(game) / "imagens"
+        if image_directory.is_dir():
+            images = sorted(
+                path
+                for path in image_directory.iterdir()
+                if path.is_file()
+                and path.suffix.lower()
+                in {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".bmp"}
+            )
+            if images:
+                return images[0]
+        return self._find_store_cover(game["titulo"])
+
+    def _read_legacy_game_records(self):
+        project_root = Path(__file__).resolve().parent
+        legacy_paths = (
+            self._games_directory / "jogos.db",
+            project_root / "dados" / "arko.db",
+        )
+        games_by_id = {}
+        for database_path in legacy_paths:
+            if not database_path.is_file():
+                continue
+            connection = sqlite3.connect(
+                f"{database_path.resolve().as_uri()}?mode=ro",
+                uri=True,
+            )
+            connection.row_factory = sqlite3.Row
+            try:
+                exists = connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='jogos'"
+                ).fetchone()
+                if exists is None:
+                    continue
+                available_columns = {
+                    row["name"]
+                    for row in connection.execute("PRAGMA table_info(jogos)")
                 }
-                for game in self.jogo_repo.listar()
-            ]
-        except Exception as error:
+                required = {"id", "titulo", "descricao", "preco", "empresa"}
+                if not required.issubset(available_columns):
+                    raise ValueError(
+                        f"A tabela de jogos em {database_path} está incompleta."
+                    )
+                optional = {"capa", "execution_path"} & available_columns
+                columns = ["id", "titulo", "descricao", "preco", "empresa"]
+                columns.extend(sorted(optional))
+                for row in connection.execute(
+                    f"SELECT {', '.join(columns)} FROM jogos ORDER BY id"
+                ):
+                    if row["id"] in games_by_id:
+                        continue
+                    games_by_id[row["id"]] = {
+                        "id": row["id"],
+                        "titulo": row["titulo"],
+                        "descricao": row["descricao"],
+                        "preco": float(row["preco"]),
+                        "empresa": row["empresa"],
+                        "capa": row["capa"] if "capa" in optional else "",
+                        "execution_path": (
+                            row["execution_path"]
+                            if "execution_path" in optional
+                            else ""
+                        ),
+                    }
+            finally:
+                connection.close()
+        return list(games_by_id.values())
+
+    def open_add_store_game_dialog(self):
+        if not self._is_store_admin():
+            QMessageBox.warning(
+                self,
+                "Acesso restrito",
+                "Somente o usuário Administrador pode adicionar jogos à Store.",
+            )
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Adicionar jogo à Store")
+        dialog.setMinimumWidth(520)
+        dialog.setStyleSheet(
+            "QDialog { background-color: #202020; color: white; }"
+            "QLabel { color: white; }"
+            "QLineEdit, QTextEdit, QDoubleSpinBox { background-color: white; "
+            "color: black; border: 1px solid #00FF00; padding: 6px; }"
+            "QPushButton { background-color: #00FF00; color: black; "
+            "font-weight: bold; padding: 8px; }"
+        )
+        layout = QVBoxLayout(dialog)
+        form = QFormLayout()
+        title_field = QLineEdit()
+        description_field = QTextEdit()
+        description_field.setFixedHeight(90)
+        price_field = QDoubleSpinBox()
+        price_field.setRange(0, 999999999.99)
+        price_field.setDecimals(2)
+        price_field.setPrefix("R$ ")
+        company_field = QLineEdit()
+        discount_field = QDoubleSpinBox()
+        discount_field.setRange(0, 100)
+        discount_field.setDecimals(0)
+        discount_field.setSuffix("%")
+        form.addRow("Título:", title_field)
+        form.addRow("Descrição:", description_field)
+        form.addRow("Preço:", price_field)
+        form.addRow("Empresa:", company_field)
+        form.addRow("Desconto:", discount_field)
+
+        image_field = QLineEdit()
+        image_field.setReadOnly(True)
+        image_button = QPushButton("Escolher imagem")
+        image_row = QWidget()
+        image_layout = QHBoxLayout(image_row)
+        image_layout.setContentsMargins(0, 0, 0, 0)
+        image_layout.addWidget(image_field)
+        image_layout.addWidget(image_button)
+        form.addRow("Capa:", image_row)
+
+        executor_field = QLineEdit()
+        executor_field.setReadOnly(True)
+        executor_button = QPushButton("Escolher executável")
+        executor_row = QWidget()
+        executor_layout = QHBoxLayout(executor_row)
+        executor_layout.setContentsMargins(0, 0, 0, 0)
+        executor_layout.addWidget(executor_field)
+        executor_layout.addWidget(executor_button)
+        form.addRow("Executável:", executor_row)
+        layout.addLayout(form)
+
+        def choose_image():
+            selected_path, _ = QFileDialog.getOpenFileName(
+                dialog,
+                "Escolher capa do jogo",
+                "",
+                "Imagens (*.png *.jpg *.jpeg *.bmp *.webp)",
+            )
+            if selected_path:
+                image_field.setText(selected_path)
+
+        def choose_executor():
+            selected_path, _ = QFileDialog.getOpenFileName(
+                dialog,
+                "Escolher executável ou atalho do jogo",
+                "",
+                "Programas, atalhos e páginas (*.exe *.bat *.cmd *.lnk *.html *.htm)",
+            )
+            if selected_path:
+                executor_field.setText(selected_path)
+
+        image_button.clicked.connect(choose_image)
+        executor_button.clicked.connect(choose_executor)
+
+        buttons = QHBoxLayout()
+        save_button = QPushButton("Adicionar")
+        cancel_button = QPushButton("Cancelar")
+        buttons.addWidget(save_button)
+        buttons.addWidget(cancel_button)
+        layout.addLayout(buttons)
+        cancel_button.clicked.connect(dialog.reject)
+
+        def save_store_game():
+            data = {
+                "titulo": title_field.text().strip(),
+                "descricao": description_field.toPlainText().strip(),
+                "preco": price_field.value(),
+                "empresa": company_field.text().strip(),
+                "desconto": discount_field.value() / 100,
+            }
+            try:
+                validated = self._validate_store_game(data, self._games_directory / "novo.txt")
+            except ValueError as error:
+                QMessageBox.warning(dialog, "Dados inválidos", str(error))
+                return
+            if not image_field.text() or not executor_field.text():
+                QMessageBox.warning(
+                    dialog,
+                    "Arquivos obrigatórios",
+                    "Escolha a capa e o executável do jogo.",
+                )
+                return
+
+            title_key = validated["titulo"].casefold()
+            if any(game["titulo"].casefold() == title_key for game in self.STORE_GAMES):
+                QMessageBox.warning(
+                    dialog,
+                    "Jogo já cadastrado",
+                    "Já existe um jogo com esse título na Store.",
+                )
+                return
+
+            try:
+                executor = self._normalize_launch_target(executor_field.text())
+                if Path(executor).suffix.lower() not in {
+                    ".exe", ".bat", ".cmd", ".lnk", ".html", ".htm"
+                }:
+                    raise ValueError("Escolha .exe, .bat, .cmd, .lnk, .html ou .htm.")
+                cover = Path(image_field.text()).resolve(strict=True)
+                if not cover.is_file() or QPixmap(str(cover)).isNull():
+                    raise ValueError("A imagem da capa não é válida.")
+
+                catalog_number = max(
+                    (
+                        int(path.name.split("-", 1)[0])
+                        for path in self._games_directory.glob("*.txt")
+                        if path.name.split("-", 1)[0].isdigit()
+                    ),
+                    default=-1,
+                ) + 1
+                stem = f"{catalog_number:03d}-{self._store_game_slug(data['titulo'])}"
+                txt_path = self._games_directory / f"{stem}.txt"
+                while txt_path.exists():
+                    catalog_number += 1
+                    stem = f"{catalog_number:03d}-{self._store_game_slug(data['titulo'])}"
+                    txt_path = self._games_directory / f"{stem}.txt"
+                asset_directory = self._games_directory / stem
+                image_directory = asset_directory / "imagens"
+                executor_directory = asset_directory / "executador"
+                image_directory.mkdir(parents=True, exist_ok=True)
+                executor_directory.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(cover, image_directory / f"capa{cover.suffix.lower()}")
+                if executor.lower().startswith(("http://", "https://")):
+                    raise ValueError(
+                        "A Store aceita um arquivo de execução; endereços de site não são suportados nesta tela."
+                    )
+                executor_path = Path(executor)
+                shutil.copy2(executor_path, executor_directory / executor_path.name)
+                self._write_store_game_txt(data, txt_path)
+            except (OSError, RuntimeError, TypeError, ValueError) as error:
+                if "asset_directory" in locals() and not txt_path.exists():
+                    try:
+                        shutil.rmtree(asset_directory)
+                    except OSError as cleanup_error:
+                        error = OSError(
+                            f"{error}; não foi possível limpar os arquivos temporários: "
+                            f"{cleanup_error}"
+                        )
+                QMessageBox.critical(
+                    dialog,
+                    "Erro ao adicionar jogo",
+                    f"Não foi possível salvar o jogo: {error}",
+                )
+                return
+
+            self.STORE_GAMES = self._load_store_catalog()
+            self._rebuild_store_cards()
+            dialog.accept()
+
+        save_button.clicked.connect(save_store_game)
+        dialog.exec()
+
+    def _rebuild_store_cards(self):
+        while self._store_grid.count():
+            item = self._store_grid.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self._game_cards = self._build_store_cards()
+        for index, card in enumerate(self._game_cards):
+            card[3].clicked.connect(
+                lambda checked=False, game_index=index: self.add_to_cart(game_index)
+            )
+            self._set_store_cart_button(index)
+        self._resize_store_cards_to_fill_panel()
+
+    def _custom_game_directory(self, game_id):
+        return self._games_directory / f"jogo_{game_id}"
+
+    def _resolve_game_asset_path(self, stored_path):
+        path = Path(str(stored_path or "")).expanduser()
+        if not path.is_absolute():
+            path = Path(__file__).resolve().parent / path
+        return path.resolve()
+
+    @staticmethod
+    def _path_is_within(path, directory):
+        try:
+            path.resolve().relative_to(directory.resolve())
+            return True
+        except ValueError:
+            return False
+
+    def _copy_game_asset(self, game_id, source_path, asset_folder, file_name=None):
+        source = self._resolve_game_asset_path(source_path)
+        if not source.is_file():
+            raise FileNotFoundError(f"O arquivo do jogo não foi encontrado: {source}")
+
+        game_directory = self._custom_game_directory(game_id)
+        if self._path_is_within(source, game_directory) and (
+            file_name is None or source.name == file_name
+        ):
+            return source.relative_to(Path(__file__).resolve().parent).as_posix()
+
+        destination_directory = game_directory / asset_folder
+        destination_directory.mkdir(parents=True, exist_ok=True)
+        destination = destination_directory / (
+            file_name or source.name
+        )
+        if source != destination.resolve():
+            shutil.copy2(source, destination)
+        return destination.relative_to(Path(__file__).resolve().parent).as_posix()
+
+    def _write_custom_game_metadata(self, game):
+        game_directory = self._custom_game_directory(game["id"])
+        game_directory.mkdir(parents=True, exist_ok=True)
+        metadata_path = game_directory / "jogo.txt"
+        temporary_path = game_directory / "jogo.txt.tmp"
+        with temporary_path.open("w", encoding="utf-8") as file:
+            file.write(self._store_game_text(game))
+        temporary_path.replace(metadata_path)
+
+    def _migrate_custom_game_files(self):
+        self._games_directory.mkdir(parents=True, exist_ok=True)
+        migration_marker = self._games_directory / ".legacy-library-migration-done"
+        if migration_marker.exists():
+            return True
+
+        missing_assets = []
+        try:
+            for game in self._read_legacy_game_records():
+                game_directory = self._custom_game_directory(game["id"])
+                metadata_path = game_directory / "jogo.txt"
+                if game["capa"] and not any(
+                    (game_directory / "imagens").glob("*")
+                ):
+                    cover_source = self._resolve_game_asset_path(game["capa"])
+                    if cover_source.is_file():
+                        cover_extension = cover_source.suffix.lower() or ".png"
+                        self._copy_game_asset(
+                            game["id"],
+                            cover_source,
+                            "imagens",
+                            f"capa{cover_extension}",
+                        )
+                    else:
+                        missing_assets.append(f"{game['titulo']}: capa não encontrada")
+
+                execution_path = str(game["execution_path"] or "").strip()
+                if execution_path and not execution_path.lower().startswith(
+                    ("http://", "https://")
+                ) and not any((game_directory / "executador").glob("*")):
+                    executor_source = self._resolve_game_asset_path(execution_path)
+                    if executor_source.is_file():
+                        self._copy_game_asset(
+                            game["id"],
+                            executor_source,
+                            "executador",
+                        )
+                    else:
+                        missing_assets.append(
+                            f"{game['titulo']}: arquivo de execução não encontrado"
+                        )
+
+                if execution_path.lower().startswith(("http://", "https://")):
+                    executor_directory = game_directory / "executador"
+                    executor_directory.mkdir(parents=True, exist_ok=True)
+                    (executor_directory / "url.txt").write_text(
+                        execution_path,
+                        encoding="utf-8",
+                    )
+
+                if not metadata_path.exists():
+                    self._write_custom_game_metadata(
+                        {
+                            "id": game["id"],
+                            "titulo": game["titulo"],
+                            "descricao": game["descricao"],
+                            "preco": game["preco"],
+                            "empresa": game["empresa"],
+                            "desconto": 0.0,
+                        }
+                    )
+
+            for metadata_path in self._games_directory.glob("jogo_*/jogo.json"):
+                with metadata_path.open("r", encoding="utf-8") as file:
+                    game = json.load(file)
+                if not isinstance(game, dict):
+                    raise ValueError(f"Arquivo inválido: {metadata_path}")
+                folder_id = metadata_path.parent.name[len("jogo_"):]
+                game_id = int(game.get("id", folder_id))
+                text_path = metadata_path.with_name("jogo.txt")
+                if not text_path.exists():
+                    self._write_custom_game_metadata(
+                        {
+                            "id": game_id,
+                            "titulo": str(game["titulo"]),
+                            "descricao": str(game["descricao"]),
+                            "preco": float(game["preco"]),
+                            "empresa": str(game["empresa"]),
+                            "desconto": 0.0,
+                        }
+                    )
+
+            if missing_assets:
+                QMessageBox.warning(
+                    self,
+                    "Arquivos de jogos não encontrados",
+                    "Alguns arquivos antigos não puderam ser copiados para as "
+                    "pastas dos jogos:\n" + "\n".join(missing_assets),
+                )
+            migration_marker.write_text("done\n", encoding="utf-8")
+        except (OSError, sqlite3.Error, TypeError, ValueError) as error:
+            QMessageBox.critical(
+                self,
+                "Erro ao organizar jogos",
+                f"Não foi possível migrar as informações e arquivos dos jogos: {error}",
+            )
+            return False
+        return True
+
+    def _load_custom_games(self):
+        self._custom_games = []
+        self._custom_games_load_error = self._custom_game_files_error
+        try:
+            for metadata_path in sorted(
+                self._games_directory.glob("jogo_*/jogo.txt"),
+                key=lambda path: int(path.parent.name[len("jogo_"):]),
+            ):
+                data = ast.literal_eval(metadata_path.read_text(encoding="utf-8"))
+                game = self._validate_store_game(data, metadata_path)
+                game_id = int(metadata_path.parent.name[len("jogo_"):])
+                image_directory = metadata_path.parent / "imagens"
+                images = sorted(
+                    path
+                    for path in image_directory.iterdir()
+                    if path.is_file()
+                    and path.suffix.lower()
+                    in {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".bmp"}
+                ) if image_directory.is_dir() else []
+                executor_directory = metadata_path.parent / "executador"
+                executors = sorted(
+                    path
+                    for path in executor_directory.iterdir()
+                    if path.is_file()
+                    and path.suffix.lower()
+                    in {".exe", ".bat", ".cmd", ".lnk", ".html", ".htm"}
+                ) if executor_directory.is_dir() else []
+                url_path = executor_directory / "url.txt"
+                execution_path = (
+                    url_path.read_text(encoding="utf-8").strip()
+                    if url_path.is_file()
+                    else str(executors[0]) if executors else ""
+                )
+                self._custom_games.append(
+                    {
+                        "id": game_id,
+                        "titulo": game["titulo"],
+                        "descricao": game["descricao"],
+                        "preco": game["preco"],
+                        "empresa": game["empresa"],
+                        "capa": str(images[0]) if images else "",
+                        "execution_path": execution_path,
+                    }
+                )
+        except (OSError, SyntaxError, TypeError, ValueError) as error:
             self._custom_games_load_error = True
             QMessageBox.critical(
                 self,
@@ -1314,7 +1864,7 @@ class MainWindow(QMainWindow):
         columns = max(1, (available_width + 20) // (card_width + 20))
 
         for position, game_index in enumerate(sorted(self._cart_games)):
-            game = self.BUILTIN_GAMES[game_index]
+            game = self.STORE_GAMES[game_index]
             card = QFrame()
             card.setObjectName("CartGameCard")
             card.setFixedSize(card_width, 321)
@@ -1532,7 +2082,7 @@ class MainWindow(QMainWindow):
 
         cards = []
         for index in sorted(self._library_games):
-            game = self.BUILTIN_GAMES[index]
+            game = self.STORE_GAMES[index]
             cover = self._game_cards[index][1].pixmap()
             active_purchase = (
                 self._active_purchase_for_game(self._current_user_email, index)
@@ -1574,7 +2124,7 @@ class MainWindow(QMainWindow):
             )
 
         for index, game in enumerate(self._custom_games):
-            cover_path = Path(__file__).resolve().parent / game["capa"]
+            cover_path = self._resolve_game_asset_path(game["capa"])
             cards.append(
                 self._create_library_card(
                     game["titulo"],
@@ -1658,7 +2208,7 @@ class MainWindow(QMainWindow):
                 if not opened:
                     raise OSError("O navegador não conseguiu abrir o endereço.")
             else:
-                file_path = Path(target)
+                file_path = self._resolve_game_asset_path(target)
                 if not file_path.is_file():
                     raise OSError("O arquivo configurado não foi encontrado.")
                 start_file = getattr(os, "startfile", None)
@@ -1674,11 +2224,24 @@ class MainWindow(QMainWindow):
             )
 
     def _launch_store_game(self, game_index):
-        game = self.BUILTIN_GAMES[game_index]
+        game = self.STORE_GAMES[game_index]
         normalized_title = self._normalize_cover_name(game["titulo"])
         supported_extensions = {".exe", ".bat", ".cmd", ".lnk", ".html", ".htm"}
         try:
-            matching_files = sorted(
+            game_executor_directory = (
+                self._store_asset_directory(game) / "executador"
+            )
+            game_files = (
+                sorted(
+                    file_path
+                    for file_path in game_executor_directory.iterdir()
+                    if file_path.is_file()
+                    and file_path.suffix.lower() in supported_extensions
+                )
+                if game_executor_directory.is_dir()
+                else []
+            )
+            matching_files = game_files or sorted(
                 file_path
                 for file_path in self._store_executor_dir.iterdir()
                 if file_path.is_file()
@@ -1697,8 +2260,9 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "Arquivo não encontrado",
-                f"Coloque em {self._store_executor_dir} um arquivo chamado "
-                f"“{game['titulo']}” com extensão .exe, .bat, .cmd, .lnk ou .html.",
+                f"Coloque o arquivo do jogo na pasta "
+                f"{self._store_asset_directory(game) / 'executador'} ou em "
+                f"{self._store_executor_dir}.",
             )
             return
         if len(matching_files) > 1:
@@ -1724,7 +2288,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "Cadastro indisponível",
-                "Corrija o arquivo dados/jogos.json antes de adicionar jogos.",
+                "Corrija os arquivos TXT das pastas em jogos/ antes de adicionar jogos.",
             )
             return
 
@@ -1758,7 +2322,7 @@ class MainWindow(QMainWindow):
         company_field = QLineEdit()
         launch_target_field = QLineEdit()
         launch_target_field.setPlaceholderText(
-            "Caminho de arquivo ou URL começando com https:// (opcional)"
+            "Arquivo local ou endereço de site (obrigatório)"
         )
         if editing_game is not None:
             title_field.setText(editing_game["titulo"])
@@ -1777,7 +2341,7 @@ class MainWindow(QMainWindow):
         launch_target_layout.addWidget(launch_target_field)
         choose_launch_target_button = QPushButton("Escolher arquivo")
         launch_target_layout.addWidget(choose_launch_target_button)
-        form.addRow("Arquivo ou site:", launch_target_row)
+        form.addRow("Executável ou site:", launch_target_row)
         layout.addLayout(form)
 
         def choose_launch_target():
@@ -1794,7 +2358,7 @@ class MainWindow(QMainWindow):
 
         cover_path = {"value": ""}
         current_cover = (
-            Path(__file__).resolve().parent / editing_game["capa"]
+            self._resolve_game_asset_path(editing_game["capa"])
             if editing_game is not None and editing_game.get("capa")
             else None
         )
@@ -1876,101 +2440,144 @@ class MainWindow(QMainWindow):
             except ValueError as error:
                 QMessageBox.warning(dialog, "Destino inválido", str(error))
                 return
-            if (
-                not title
-                or not description
-                or not company
-                or (
-                    current_cover is None
-                    and initial_cover is None
-                    and not cover_path["value"]
-                )
-            ):
+            if not title or not description or not company:
                 QMessageBox.warning(
                     dialog,
                     "Campos obrigatórios",
-                    "Preencha todos os campos e escolha a capa do jogo.",
+                    "Preencha o título, a descrição e a empresa.",
+                )
+                return
+            if not launch_target:
+                QMessageBox.warning(
+                    dialog,
+                    "Executável obrigatório",
+                    "Escolha um arquivo para iniciar o jogo ou informe um endereço de site.",
+                )
+                return
+            if (
+                not launch_target.lower().startswith(("http://", "https://"))
+                and Path(launch_target).suffix.lower()
+                not in {".exe", ".bat", ".cmd", ".lnk", ".html", ".htm"}
+            ):
+                QMessageBox.warning(
+                    dialog,
+                    "Arquivo incompatível",
+                    "Use um arquivo .exe, .bat, .cmd, .lnk, .html ou .htm.",
                 )
                 return
 
-            cover_dir = Path(__file__).resolve().parent / "dados" / "capas"
             source_cover = Path(cover_path["value"]) if cover_path["value"] else None
-            if source_cover is not None:
-                relative_cover = Path("dados") / "capas" / (
-                    f"{uuid.uuid4().hex}{source_cover.suffix.lower()}"
-                )
-            elif current_cover is not None:
-                relative_cover = Path(editing_game["capa"])
-            elif initial_cover is not None:
-                relative_cover = Path("dados") / "capas" / (
-                    f"{uuid.uuid4().hex}.png"
-                )
-            else:
+            if (
+                source_cover is None
+                and initial_cover is None
+                and (current_cover is None or not current_cover.is_file())
+            ):
                 QMessageBox.warning(
                     dialog, "Capa obrigatória", "Escolha uma capa para o jogo."
                 )
                 return
-            game = {
-                "titulo": title,
-                "descricao": description,
-                "preco": price_field.value(),
-                "empresa": company,
-                "capa": str(relative_cover),
-                "execution_path": launch_target,
-            }
-            updated_games = list(self._custom_games)
-            if game_index is None:
-                novo_jogo = Jogo(
-                    title,
-                    description,
-                    float(price_field.value()),
-                    company,
-                    str(relative_cover),
-                    execution_path=launch_target,
-                )
-                self.jogo_repo.inserir(novo_jogo)
-                updated_games.append({
-                    "id": novo_jogo.id,
-                    "titulo": title,
-                    "descricao": description,
-                    "preco": float(price_field.value()),
-                    "empresa": company,
-                    "capa": str(relative_cover),
-                    "execution_path": launch_target,
-                })
-            else:
-                jogo_db = self.jogo_repo.buscar_por_id(self._custom_games[game_index]["id"])
-                if jogo_db is not None:
-                    jogo_db.titulo = title
-                    jogo_db.descricao = description
-                    jogo_db.preco = float(price_field.value())
-                    jogo_db.empresa = company
-                    jogo_db.capa = str(relative_cover)
-                    jogo_db.execution_path = launch_target
-                    self.jogo_repo.atualizar(jogo_db)
-                updated_games[game_index] = {
-                    "id": self._custom_games[game_index]["id"],
-                    "titulo": title,
-                    "descricao": description,
-                    "preco": float(price_field.value()),
-                    "empresa": company,
-                    "capa": str(relative_cover),
-                    "execution_path": launch_target,
-                }
-            destination_cover = (
-                Path(__file__).resolve().parent / relative_cover
-                if source_cover is not None
-                else None
+
+            game_id = (
+                self._custom_games[game_index]["id"]
+                if game_index is not None
+                else max((game["id"] for game in self._custom_games), default=0) + 1
             )
+            while (
+                game_index is None
+                and self._custom_game_directory(game_id).exists()
+            ):
+                game_id += 1
+            game_directory = self._custom_game_directory(game_id)
+            is_new_game = game_index is None
+
             try:
-                if source_cover is not None and destination_cover is not None:
-                    cover_dir.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(source_cover, destination_cover)
-                elif initial_cover is not None and destination_cover is not None:
-                    cover_dir.mkdir(parents=True, exist_ok=True)
+                if source_cover is not None:
+                    cover_extension = source_cover.suffix.lower() or ".png"
+                    self._copy_game_asset(
+                        game_id,
+                        source_cover,
+                        "imagens",
+                        f"capa{cover_extension}",
+                    )
+                elif initial_cover is not None:
+                    cover_directory = game_directory / "imagens"
+                    cover_directory.mkdir(parents=True, exist_ok=True)
+                    destination_cover = cover_directory / "capa.png"
                     if not initial_cover.save(str(destination_cover), "PNG"):
                         raise OSError("Não foi possível salvar a capa do jogo.")
-            except (OSError, TypeError, ValueError) as error:
+                else:
+                    self._copy_game_asset(
+                        game_id,
+                        current_cover,
+                        "imagens",
+                        f"capa{current_cover.suffix.lower() or '.png'}",
+                    )
+
+                if launch_target.lower().startswith(("http://", "https://")):
+                    executor_directory = game_directory / "executador"
+                    executor_directory.mkdir(parents=True, exist_ok=True)
+                    for existing_executor in executor_directory.iterdir():
+                        if existing_executor.is_file():
+                            existing_executor.unlink()
+                    (executor_directory / "url.txt").write_text(
+                        launch_target,
+                        encoding="utf-8",
+                    )
+                else:
+                    executor_directory = game_directory / "executador"
+                    executor_directory.mkdir(parents=True, exist_ok=True)
+                    executor_source = self._resolve_game_asset_path(launch_target)
+                    if not self._path_is_within(executor_source, executor_directory):
+                        for existing_executor in executor_directory.iterdir():
+                            if existing_executor.is_file():
+                                existing_executor.unlink()
+                        self._copy_game_asset(game_id, launch_target, "executador")
+
+                image_directory = game_directory / "imagens"
+                for existing_image in image_directory.iterdir():
+                    if (
+                        existing_image.is_file()
+                        and existing_image != image_directory / f"capa{existing_image.suffix.lower()}"
+                    ):
+                        existing_image.unlink()
+                game_data = {
+                    "id": game_id,
+                    "titulo": title,
+                    "descricao": description,
+                    "preco": float(price_field.value()),
+                    "empresa": company,
+                    "desconto": 0.0,
+                }
+                self._write_custom_game_metadata(game_data)
+                saved_game = dict(game_data)
+                saved_game["capa"] = str(
+                    next(
+                        path
+                        for path in image_directory.iterdir()
+                        if path.is_file()
+                    )
+                )
+                url_path = game_directory / "executador" / "url.txt"
+                saved_game["execution_path"] = (
+                    url_path.read_text(encoding="utf-8").strip()
+                    if url_path.is_file()
+                    else str(
+                        next(
+                            path
+                            for path in executor_directory.iterdir()
+                            if path.is_file()
+                        )
+                    )
+                )
+            except (OSError, StopIteration, TypeError, ValueError) as error:
+                if is_new_game:
+                    try:
+                        shutil.rmtree(game_directory)
+                    except OSError as cleanup_error:
+                        error = OSError(
+                            f"{error}; não foi possível limpar o cadastro incompleto: "
+                            f"{cleanup_error}"
+                        )
                 QMessageBox.critical(
                     dialog,
                     "Erro ao salvar jogo",
@@ -1978,20 +2585,10 @@ class MainWindow(QMainWindow):
                 )
                 return
 
-            self._custom_games = updated_games
-            if (
-                editing_game is not None
-                and source_cover is not None
-                and current_cover is not None
-            ):
-                try:
-                    current_cover.unlink(missing_ok=True)
-                except OSError as error:
-                    QMessageBox.warning(
-                        dialog,
-                        "Capa antiga não removida",
-                        f"O jogo foi atualizado, mas não foi possível apagar a capa antiga: {error}",
-                    )
+            if game_index is None:
+                self._custom_games.append(saved_game)
+            else:
+                self._custom_games[game_index] = saved_game
             if builtin_index is not None:
                 self._library_games.discard(builtin_index)
             dialog.accept()
@@ -2002,7 +2599,7 @@ class MainWindow(QMainWindow):
 
     def edit_builtin_game(self, game_index):
         self.open_add_game_dialog(
-            initial_game=self.BUILTIN_GAMES[game_index],
+            initial_game=self.STORE_GAMES[game_index],
             initial_cover=self._game_cards[game_index][1].pixmap(),
             builtin_index=game_index,
         )
@@ -2092,7 +2689,7 @@ class MainWindow(QMainWindow):
             self,
             "Remover avaliação",
             f"Deseja remover sua avaliação de "
-            f"“{self.BUILTIN_GAMES[game_index]['titulo']}”?",
+            f"“{self.STORE_GAMES[game_index]['titulo']}”?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -2199,27 +2796,24 @@ class MainWindow(QMainWindow):
 
         updated_games = list(self._custom_games)
         removed_game = updated_games.pop(game_index)
-        try:
-            jogo_db = self.jogo_repo.buscar_por_id(removed_game["id"])
-            if jogo_db is not None:
-                self.jogo_repo.excluir(jogo_db.id)
-        except Exception as error:
-            QMessageBox.critical(
-                self,
-                "Erro ao apagar jogo",
-                f"Não foi possível apagar o jogo: {error}",
-            )
-            return
-
         self._custom_games = updated_games
-        cover_path = Path(__file__).resolve().parent / removed_game["capa"]
         try:
-            cover_path.unlink(missing_ok=True)
+            game_directory = self._custom_game_directory(removed_game["id"]).resolve()
+            if game_directory.parent != self._games_directory.resolve():
+                raise ValueError("A pasta do jogo está fora do diretório permitido.")
+            if game_directory.exists():
+                shutil.rmtree(game_directory)
         except OSError as error:
             QMessageBox.warning(
                 self,
-                "Capa não removida",
-                f"O jogo foi apagado, mas não foi possível apagar a capa: {error}",
+                "Arquivos do jogo não removidos",
+                f"O jogo foi apagado, mas não foi possível remover sua pasta: {error}",
+            )
+        except ValueError as error:
+            QMessageBox.critical(
+                self,
+                "Pasta do jogo inválida",
+                f"O jogo foi apagado, mas a pasta foi preservada: {error}",
             )
         self._refresh_library()
 
@@ -2352,6 +2946,8 @@ class MainWindow(QMainWindow):
 
     def _activate_account(self, email, name):
         self._current_user_email = email
+        self._current_user_name = name
+        self._update_store_admin_controls()
         self._load_user_library(email)
         self._load_friends_from_db()
         self.ui.Conta.setText(f"👤 {name}")
@@ -2662,6 +3258,8 @@ class MainWindow(QMainWindow):
             self.usuario_repo.atualizar(current_user)
 
         self._current_user_email = email
+        self._current_user_name = name
+        self._update_store_admin_controls()
         self._account_current_password.clear()
         self._account_current_password.clear()
         self._account_password.clear()
@@ -2673,6 +3271,8 @@ class MainWindow(QMainWindow):
 
     def logout(self):
         self._current_user_email = None
+        self._current_user_name = None
+        self._update_store_admin_controls()
         self._library_games.clear()
         self._friends_list.clear()
         self._account_name.clear()
@@ -2780,8 +3380,8 @@ class MainWindow(QMainWindow):
         games = [
             {
                 "id": str(index),
-                "titulo": self.BUILTIN_GAMES[index]["titulo"],
-                "valor": self.BUILTIN_GAMES[index]["preco"],
+                "titulo": self.STORE_GAMES[index]["titulo"],
+                "valor": self.STORE_GAMES[index]["preco"],
             }
             for index in sorted(self._cart_games)
         ]

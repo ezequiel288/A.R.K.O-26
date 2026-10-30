@@ -1,0 +1,7 @@
+{
+    "titulo": "Hollow Knight",
+    "descricao": "Exploração intensa, combatentes desafiadores e um mundo melancólico em pixel art.",
+    "preco": 40.0,
+    "empresa": "Team Cherry",
+    "desconto": 0.40,
+}

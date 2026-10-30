@@ -7,7 +7,12 @@ class BancoDeDados:
     """Gerencia a conexão e a estrutura do banco SQLite do projeto."""
 
     def __init__(self, arquivo="dados/arko.db", perfil="completo"):
-        if perfil not in {"completo", "principal", "avaliacoes", "biblioteca"}:
+        if perfil not in {
+            "completo",
+            "principal",
+            "avaliacoes",
+            "biblioteca",
+        }:
             raise ValueError(f"Perfil de banco de dados inválido: {perfil}")
         self.perfil = perfil
         self.arquivo = Path(arquivo)
@@ -25,17 +30,6 @@ class BancoDeDados:
                 nome TEXT NOT NULL,
                 email TEXT NOT NULL UNIQUE,
                 senha TEXT NOT NULL
-            )
-            """,
-            "jogos": """
-            CREATE TABLE IF NOT EXISTS jogos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                titulo TEXT NOT NULL,
-                descricao TEXT NOT NULL,
-                preco REAL NOT NULL,
-                empresa TEXT NOT NULL,
-                capa TEXT DEFAULT '',
-                execution_path TEXT NOT NULL DEFAULT ''
             )
             """,
             "biblioteca": """
@@ -91,7 +85,6 @@ class BancoDeDados:
             "completo": set(tabelas),
             "principal": {
                 "usuarios",
-                "jogos",
                 "amigos",
                 "transacoes",
                 "carrinho",
@@ -103,17 +96,6 @@ class BancoDeDados:
         with self.conexao:
             for nome in tabelas_por_perfil[self.perfil]:
                 self.conexao.execute(tabelas[nome])
-            if self.perfil in {"completo", "principal"}:
-                game_columns = {
-                    row["name"]
-                    for row in self.conexao.execute(
-                        "PRAGMA table_info(jogos)"
-                    ).fetchall()
-                }
-                if "execution_path" not in game_columns:
-                    self.conexao.execute(
-                        "ALTER TABLE jogos ADD COLUMN execution_path TEXT NOT NULL DEFAULT ''"
-                    )
             if self.perfil == "principal":
                 self.conexao.execute(
                     """

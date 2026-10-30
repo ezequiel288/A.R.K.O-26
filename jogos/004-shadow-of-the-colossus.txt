@@ -1,0 +1,7 @@
+{
+    "titulo": "Shadow of the Colossus",
+    "descricao": "Aventura de ação em um mundo vasto, com confrontos contra enormes colossos.",
+    "preco": 30.00,
+    "empresa": "Team Ico",
+    "desconto": 0.50,
+}
