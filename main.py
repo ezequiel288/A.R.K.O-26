@@ -503,7 +503,13 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "_game_cards") or not self._game_cards:
             return
 
-        row_count = (len(self._game_cards) + 4) // 5
+        visible_card_count = sum(
+            not card[0].isHidden() for card in self._game_cards
+        )
+        if not visible_card_count:
+            return
+
+        row_count = (visible_card_count + 4) // 5
         margins = self._store_grid.contentsMargins()
         available_height = (
             self._store_scroll.viewport().height()
@@ -1039,13 +1045,22 @@ class MainWindow(QMainWindow):
         self._show_page("store")
         search_text = (search_text or "").strip().casefold()
         matches = []
+        matching_cards = []
         for index, game in enumerate(self.STORE_GAMES):
             searchable_text = " ".join(
                 (game["titulo"], game["descricao"], game["empresa"])
             ).casefold()
             is_match = not search_text or search_text in searchable_text
             matches.append(is_match)
-            self._game_cards[index][0].setVisible(is_match)
+            card = self._game_cards[index][0]
+            self._store_grid.removeWidget(card)
+            card.setVisible(is_match)
+            if is_match:
+                matching_cards.append(card)
+
+        for position, card in enumerate(matching_cards):
+            self._store_grid.addWidget(card, position // 5, position % 5)
+        self._resize_store_cards_to_fill_panel()
 
         if search_text and not any(matches):
             QMessageBox.information(
