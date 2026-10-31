@@ -24,6 +24,9 @@ https://tkinterbuilder.com/
 - `imagens/`: imagens usadas pela interface.
 - `executador/`: arquivos locais usados para iniciar jogos da Store.
 
+As capas da Store e da Biblioteca aceitam PNG, JPG, JPEG, JFIF, WebP, BMP e
+outros formatos de imagem suportados pela instalação do Qt.
+
 Os dados de contas, biblioteca, avaliações, carrinho, amigos e transações são
 mantidos juntos em `dados/arko.db`. Se `avaliacoes.db` ou `biblioteca.db`
 existirem de versões anteriores, seus registros são consolidados sem duplicar

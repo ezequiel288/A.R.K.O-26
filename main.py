@@ -39,7 +39,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from PyQt6.QtCore import Qt, QUrl
-from PyQt6.QtGui import QColor, QDesktopServices, QFont, QPainter, QPixmap
+from PyQt6.QtGui import (
+    QColor,
+    QDesktopServices,
+    QFont,
+    QImageReader,
+    QPainter,
+    QPixmap,
+)
 from PyQt6.uic import loadUiType
 from database import BancoDeDados
 from usuario import Usuario, UsuarioRepositorio
@@ -59,6 +66,30 @@ class Ui_MainWindow(Ui_MainWindowBase):
 
 class MainWindow(QMainWindow):
     PASSWORD_HASH_ITERATIONS = 600_000
+
+    @staticmethod
+    def _supported_image_extensions():
+        extensions = {
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".jfif",
+            ".webp",
+            ".bmp",
+        }
+        extensions.update(
+            f".{bytes(image_format).decode('ascii').lower()}"
+            for image_format in QImageReader.supportedImageFormats()
+        )
+        return extensions
+
+    @classmethod
+    def _image_file_filter(cls):
+        patterns = " ".join(
+            f"*{extension}"
+            for extension in sorted(cls._supported_image_extensions())
+        )
+        return f"Imagens ({patterns});;Todos os arquivos (*)"
 
     def __init__(self):
         super().__init__()
@@ -315,7 +346,7 @@ class MainWindow(QMainWindow):
         for file_path in sorted(images_dir.iterdir()):
             if not file_path.is_file():
                 continue
-            if file_path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".bmp"}:
+            if file_path.suffix.lower() not in self._supported_image_extensions():
                 continue
 
             normalized_name = self._normalize_cover_name(file_path.stem)
@@ -1421,8 +1452,7 @@ class MainWindow(QMainWindow):
                 path
                 for path in image_directory.iterdir()
                 if path.is_file()
-                and path.suffix.lower()
-                in {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".bmp"}
+                and path.suffix.lower() in self._supported_image_extensions()
             )
             if images:
                 return images[0]
@@ -1556,7 +1586,7 @@ class MainWindow(QMainWindow):
                 dialog,
                 "Escolher capa do jogo",
                 "",
-                "Imagens (*.png *.jpg *.jpeg *.bmp *.webp)",
+                self._image_file_filter(),
             )
             if selected_path:
                 image_field.setText(selected_path)
@@ -1851,7 +1881,7 @@ class MainWindow(QMainWindow):
                     for path in image_directory.iterdir()
                     if path.is_file()
                     and path.suffix.lower()
-                    in {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".bmp"}
+                    in self._supported_image_extensions()
                 ) if image_directory.is_dir() else []
                 executor_directory = metadata_path.parent / "executador"
                 executors = sorted(
@@ -2527,7 +2557,7 @@ class MainWindow(QMainWindow):
                 dialog,
                 "Escolher capa do jogo",
                 "",
-                "Imagens (*.png *.jpg *.jpeg *.bmp *.webp)",
+                self._image_file_filter(),
             )
             if selected_path:
                 pixmap = QPixmap(selected_path)
