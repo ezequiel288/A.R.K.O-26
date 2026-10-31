@@ -6,15 +6,7 @@ from pathlib import Path
 class BancoDeDados:
     """Gerencia a conexão e a estrutura do banco SQLite do projeto."""
 
-    def __init__(self, arquivo="dados/arko.db", perfil="completo"):
-        if perfil not in {
-            "completo",
-            "principal",
-            "avaliacoes",
-            "biblioteca",
-        }:
-            raise ValueError(f"Perfil de banco de dados inválido: {perfil}")
-        self.perfil = perfil
+    def __init__(self, arquivo="dados/arko.db"):
         self.arquivo = Path(arquivo)
         self.arquivo.parent.mkdir(parents=True, exist_ok=True)
         self.conexao = sqlite3.connect(self.arquivo)
@@ -81,69 +73,17 @@ class BancoDeDados:
             )
             """,
         }
-        tabelas_por_perfil = {
-            "completo": set(tabelas),
-            "principal": {
-                "usuarios",
-                "amigos",
-                "transacoes",
-                "carrinho",
-            },
-            "avaliacoes": {"avaliacoes"},
-            "biblioteca": {"biblioteca"},
-        }
-
         with self.conexao:
-            for nome in tabelas_por_perfil[self.perfil]:
+            for nome in tabelas:
                 self.conexao.execute(tabelas[nome])
-            if self.perfil == "principal":
-                self.conexao.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS app_metadata (
-                        chave TEXT PRIMARY KEY,
-                        valor TEXT NOT NULL
-                    )
-                    """
+            self.conexao.execute(
+                """
+                CREATE TABLE IF NOT EXISTS app_metadata (
+                    chave TEXT PRIMARY KEY,
+                    valor TEXT NOT NULL
                 )
-
-    def copiar_tabela_para(self, destino, tabela, colunas):
-        colunas_por_tabela = {
-            "avaliacoes": {"id", "usuario_email", "jogo_id", "nota", "data"},
-            "biblioteca": {
-                "id",
-                "usuario_email",
-                "jogo_id",
-                "titulo",
-                "data_adicao",
-            },
-        }
-        if tabela not in colunas_por_tabela or not set(colunas).issubset(
-            colunas_por_tabela[tabela]
-        ):
-            raise ValueError("Tabela ou colunas não permitidas para migração.")
-
-        table_exists = self.conexao.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
-            (tabela,),
-        ).fetchone()
-        if table_exists is None:
-            return 0
-
-        column_list = ", ".join(colunas)
-        placeholders = ", ".join("?" for _ in colunas)
-        registros = self.conexao.execute(
-            f"SELECT {column_list} FROM {tabela}"
-        ).fetchall()
-        if not registros:
-            return 0
-
-        destino.conexao.executemany(
-            f"INSERT OR IGNORE INTO {tabela} ({column_list}) "
-            f"VALUES ({placeholders})",
-            [tuple(registro[coluna] for coluna in colunas) for registro in registros],
-        )
-        destino.conexao.commit()
-        return len(registros)
+                """
+            )
 
     def fechar(self):
         self.conexao.close()

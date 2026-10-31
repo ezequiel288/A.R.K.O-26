@@ -64,20 +64,12 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self._games_directory = Path(__file__).resolve().parent / "jogos"
-        self.db = BancoDeDados(perfil="principal")
-        self.avaliacoes_db = BancoDeDados(
-            self.db.arquivo.with_name("avaliacoes.db"),
-            perfil="avaliacoes",
-        )
-        self.biblioteca_db = BancoDeDados(
-            self.db.arquivo.with_name("biblioteca.db"),
-            perfil="biblioteca",
-        )
+        self.db = BancoDeDados()
         self._migrate_separated_databases()
         self.usuario_repo = UsuarioRepositorio(self.db)
         self.amigo_repo = AmigoRepositorio(self.db)
-        self.avaliacao_repo = AvaliacaoRepositorio(self.avaliacoes_db)
-        self.biblioteca_repo = BibliotecaRepositorio(self.biblioteca_db)
+        self.avaliacao_repo = AvaliacaoRepositorio(self.db)
+        self.biblioteca_repo = BibliotecaRepositorio(self.db)
         self.carrinho_repo = CarrinhoRepositorio(self.db)
         self.transacao_repo = TransacaoRepositorio(self.db)
 
@@ -381,9 +373,10 @@ class MainWindow(QMainWindow):
         self._store_panel.hide()
 
     def _is_store_admin(self):
+        nomes_admin = {"administrador", "arthur"}
         return (
             self._current_user_name is not None
-            and self._current_user_name.strip().casefold() == "administrador"
+            and self._current_user_name.strip().casefold() in nomes_admin
         )
 
     def _update_store_admin_controls(self):
@@ -633,95 +626,151 @@ class MainWindow(QMainWindow):
                 pass
 
     def _migrate_separated_databases(self):
+        legacy_databases = (
+            (
+                self.db.arquivo.with_name("avaliacoes.db"),
+                "avaliacoes",
+                ("id", "usuario_email", "jogo_id", "nota", "data"),
+                {"usuario_email", "jogo_id", "nota", "data"},
+            ),
+            (
+                self.db.arquivo.with_name("biblioteca.db"),
+                "biblioteca",
+                ("id", "usuario_email", "jogo_id", "titulo", "data_adicao"),
+                {"usuario_email", "jogo_id", "titulo"},
+            ),
+        )
+        tables_to_remove = []
         try:
-            migrations = (
-                (
-                    "split_reviews_and_library_v1",
-                    (
-                        (
-                            self.avaliacoes_db,
-                            "avaliacoes",
-                            ("id", "usuario_email", "jogo_id", "nota", "data"),
-                        ),
-                        (
-                            self.biblioteca_db,
-                            "biblioteca",
-                            (
-                                "id",
-                                "usuario_email",
-                                "jogo_id",
-                                "titulo",
-                                "data_adicao",
-                            ),
-                        ),
-                    ),
-                ),
-            )
-            for migration_key, tables in migrations:
-                migration = self.db.conexao.execute(
-                    "SELECT valor FROM app_metadata WHERE chave = ?",
-                    (migration_key,),
-                ).fetchone()
-                if migration is not None and migration["valor"] == "done":
+            migration_key = "consolidate_reviews_and_library_v2"
+            for source_path, table, columns, required_columns in legacy_databases:
+                if not source_path.is_file():
                     continue
 
-                for destination, table, columns in tables:
-                    source_exists = self.db.conexao.execute(
+                source = sqlite3.connect(
+                    f"{source_path.resolve().as_uri()}?mode=ro",
+                    uri=True,
+                )
+                source.row_factory = sqlite3.Row
+                try:
+                    source_exists = source.execute(
                         "SELECT 1 FROM sqlite_master "
                         "WHERE type = 'table' AND name = ?",
                         (table,),
                     ).fetchone()
                     if source_exists is None:
+                        tables_to_remove.append(source_path)
                         continue
 
                     available_columns = {
                         row["name"]
-                        for row in self.db.conexao.execute(
+                        for row in source.execute(
                             f"PRAGMA table_info({table})"
                         ).fetchall()
                     }
-                    source_columns = tuple(
-                        column for column in columns if column in available_columns
-                    )
-                    required_columns = {
-                        "avaliacoes": {
-                            "id",
-                            "usuario_email",
-                            "jogo_id",
-                            "nota",
-                            "data",
-                        },
-                        "biblioteca": {
-                            "id",
-                            "usuario_email",
-                            "jogo_id",
-                            "titulo",
-                        },
-                    }[table]
-                    if not required_columns.issubset(source_columns):
+                    if not set(required_columns).issubset(available_columns):
                         raise ValueError(
                             f"A tabela antiga {table} não possui todas as colunas "
                             "necessárias para a migração."
                         )
-                    self.db.copiar_tabela_para(
-                        destination,
-                        table,
-                        source_columns,
+                    source_columns = tuple(
+                        column for column in columns if column in available_columns
                     )
+                    records = source.execute(
+                        f"SELECT {', '.join(source_columns)} FROM {table}"
+                    ).fetchall()
+                    tables_to_remove.append(source_path)
+                finally:
+                    source.close()
 
                 with self.db.conexao:
-                    self.db.conexao.execute(
-                        "INSERT OR REPLACE INTO app_metadata (chave, valor) "
-                        "VALUES (?, 'done')",
-                        (migration_key,),
-                    )
+                    for record in records:
+                        if table == "avaliacoes":
+                            existing = self.db.conexao.execute(
+                                "SELECT 1 FROM avaliacoes "
+                                "WHERE usuario_email = ? AND jogo_id = ?",
+                                (record["usuario_email"], record["jogo_id"]),
+                            ).fetchone()
+                            if existing is None:
+                                self.db.conexao.execute(
+                                    "INSERT INTO avaliacoes "
+                                    "(usuario_email, jogo_id, nota, data) "
+                                    "VALUES (?, ?, ?, ?)",
+                                    (
+                                        record["usuario_email"],
+                                        record["jogo_id"],
+                                        record["nota"],
+                                        record["data"],
+                                    ),
+                                )
+                        else:
+                            existing = self.db.conexao.execute(
+                                "SELECT 1 FROM biblioteca "
+                                "WHERE usuario_email = ? AND jogo_id = ?",
+                                (record["usuario_email"], record["jogo_id"]),
+                            ).fetchone()
+                            if existing is None:
+                                if "data_adicao" in source_columns:
+                                    self.db.conexao.execute(
+                                        "INSERT INTO biblioteca "
+                                        "(usuario_email, jogo_id, titulo, data_adicao) "
+                                        "VALUES (?, ?, ?, ?)",
+                                        (
+                                            record["usuario_email"],
+                                            record["jogo_id"],
+                                            record["titulo"],
+                                            record["data_adicao"],
+                                        ),
+                                    )
+                                else:
+                                    self.db.conexao.execute(
+                                        "INSERT INTO biblioteca "
+                                        "(usuario_email, jogo_id, titulo) "
+                                        "VALUES (?, ?, ?)",
+                                        (
+                                            record["usuario_email"],
+                                            record["jogo_id"],
+                                            record["titulo"],
+                                        ),
+                                    )
+
+            with self.db.conexao:
+                self.db.conexao.execute(
+                    "INSERT OR REPLACE INTO app_metadata (chave, valor) "
+                    "VALUES (?, 'done')",
+                    (migration_key,),
+                )
         except (OSError, sqlite3.Error, ValueError) as error:
             QMessageBox.critical(
                 self,
                 "Erro ao organizar os bancos",
-                f"Não foi possível migrar os dados: {error}",
+                f"Não foi possível consolidar os dados no arko.db: {error}",
             )
-            raise RuntimeError("Falha ao migrar os dados para os novos bancos.") from error
+            raise RuntimeError("Falha ao consolidar os bancos de dados.") from error
+
+        removal_errors = []
+        for source_path in tables_to_remove:
+            try:
+                source_path.unlink(missing_ok=True)
+            except OSError as error:
+                removal_errors.append(f"{source_path.name}: {error}")
+                continue
+            for path in (
+                source_path.with_name(source_path.name + "-wal"),
+                source_path.with_name(source_path.name + "-shm"),
+                source_path.with_name(source_path.name + "-journal"),
+            ):
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError as error:
+                    removal_errors.append(f"{path.name}: {error}")
+        if removal_errors:
+            QMessageBox.warning(
+                self,
+                "Bancos antigos não removidos",
+                "Os dados foram consolidados, mas não foi possível remover "
+                "alguns arquivos antigos:\n" + "\n".join(removal_errors),
+            )
 
     def _load_friends_from_db(self):
         self._friends_list.clear()
@@ -1487,17 +1536,19 @@ class MainWindow(QMainWindow):
         image_layout.setContentsMargins(0, 0, 0, 0)
         image_layout.addWidget(image_field)
         image_layout.addWidget(image_button)
-        form.addRow("Capa:", image_row)
+        form.addRow("Capa (opcional):", image_row)
 
         executor_field = QLineEdit()
-        executor_field.setReadOnly(True)
-        executor_button = QPushButton("Escolher executável")
+        executor_field.setPlaceholderText(
+            "Opcional: caminho do executável ou link HTTP/HTTPS"
+        )
+        executor_button = QPushButton("Escolher arquivo")
         executor_row = QWidget()
         executor_layout = QHBoxLayout(executor_row)
         executor_layout.setContentsMargins(0, 0, 0, 0)
         executor_layout.addWidget(executor_field)
         executor_layout.addWidget(executor_button)
-        form.addRow("Executável:", executor_row)
+        form.addRow("Executável ou link (opcional):", executor_row)
         layout.addLayout(form)
 
         def choose_image():
@@ -1546,14 +1597,6 @@ class MainWindow(QMainWindow):
             except ValueError as error:
                 QMessageBox.warning(dialog, "Dados inválidos", str(error))
                 return
-            if not image_field.text() or not executor_field.text():
-                QMessageBox.warning(
-                    dialog,
-                    "Arquivos obrigatórios",
-                    "Escolha a capa e o executável do jogo.",
-                )
-                return
-
             title_key = validated["titulo"].casefold()
             if any(game["titulo"].casefold() == title_key for game in self.STORE_GAMES):
                 QMessageBox.warning(
@@ -1565,9 +1608,11 @@ class MainWindow(QMainWindow):
 
             try:
                 executor = self._normalize_launch_target(executor_field.text())
-                cover = Path(image_field.text()).resolve(strict=True)
-                if not cover.is_file() or QPixmap(str(cover)).isNull():
-                    raise ValueError("A imagem da capa não é válida.")
+                cover = None
+                if image_field.text():
+                    cover = Path(image_field.text()).resolve(strict=True)
+                    if not cover.is_file() or QPixmap(str(cover)).isNull():
+                        raise ValueError("A imagem da capa não é válida.")
 
                 catalog_number = max(
                     (
@@ -1588,13 +1633,22 @@ class MainWindow(QMainWindow):
                 executor_directory = asset_directory / "executador"
                 image_directory.mkdir(parents=True, exist_ok=True)
                 executor_directory.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(cover, image_directory / f"capa{cover.suffix.lower()}")
-                if executor.lower().startswith(("http://", "https://")):
-                    raise ValueError(
-                        "A Store aceita um arquivo de execução; endereços de site não são suportados nesta tela."
+                if cover is not None:
+                    shutil.copy2(
+                        cover,
+                        image_directory / f"capa{cover.suffix.lower()}",
                     )
-                executor_path = Path(executor)
-                shutil.copy2(executor_path, executor_directory / executor_path.name)
+                if executor.lower().startswith(("http://", "https://")):
+                    (executor_directory / "url.txt").write_text(
+                        executor,
+                        encoding="utf-8",
+                    )
+                elif executor:
+                    executor_path = Path(executor)
+                    shutil.copy2(
+                        executor_path,
+                        executor_directory / executor_path.name,
+                    )
                 self._write_store_game_txt(data, txt_path)
             except (OSError, RuntimeError, TypeError, ValueError) as error:
                 if "asset_directory" in locals() and not txt_path.exists():
@@ -2197,7 +2251,11 @@ class MainWindow(QMainWindow):
             )
 
         for index, game in enumerate(self._custom_games):
-            cover_path = self._resolve_game_asset_path(game["capa"])
+            cover_path = (
+                self._resolve_game_asset_path(game["capa"])
+                if game.get("capa")
+                else None
+            )
             cards.append(
                 self._create_library_card(
                     game["titulo"],
@@ -2303,6 +2361,10 @@ class MainWindow(QMainWindow):
             game_executor_directory = (
                 self._store_asset_directory(game) / "executador"
             )
+            url_path = game_executor_directory / "url.txt"
+            if url_path.is_file():
+                self._launch_game(url_path.read_text(encoding="utf-8").strip())
+                return
             game_files = (
                 sorted(
                     file_path
@@ -2329,8 +2391,9 @@ class MainWindow(QMainWindow):
         if not matching_files:
             QMessageBox.information(
                 self,
-                "Arquivo não encontrado",
-                f"Coloque o arquivo do jogo na pasta "
+                "Destino não configurado",
+                f"Executáveis e links são opcionais. Para configurar um, coloque "
+                f"o arquivo do jogo na pasta "
                 f"{self._store_asset_directory(game) / 'executador'} ou em "
                 f"{self._store_executor_dir}.",
             )
@@ -2392,7 +2455,7 @@ class MainWindow(QMainWindow):
         company_field = QLineEdit()
         launch_target_field = QLineEdit()
         launch_target_field.setPlaceholderText(
-            "Arquivo local ou endereço de site (obrigatório)"
+            "Opcional: arquivo local ou endereço HTTP/HTTPS"
         )
         if editing_game is not None:
             title_field.setText(editing_game["titulo"])
@@ -2411,7 +2474,7 @@ class MainWindow(QMainWindow):
         launch_target_layout.addWidget(launch_target_field)
         choose_launch_target_button = QPushButton("Escolher arquivo")
         launch_target_layout.addWidget(choose_launch_target_button)
-        form.addRow("Executável ou site:", launch_target_row)
+        form.addRow("Executável ou site (opcional):", launch_target_row)
         layout.addLayout(form)
 
         def choose_launch_target():
@@ -2457,7 +2520,7 @@ class MainWindow(QMainWindow):
                         Qt.TransformationMode.SmoothTransformation,
                     )
                 )
-        choose_cover_button = QPushButton("Escolher capa")
+        choose_cover_button = QPushButton("Escolher capa (opcional)")
 
         def choose_cover():
             selected_path, _ = QFileDialog.getOpenFileName(
@@ -2518,23 +2581,7 @@ class MainWindow(QMainWindow):
                     "Preencha o título, a descrição e a empresa.",
                 )
                 return
-            if not launch_target:
-                QMessageBox.warning(
-                    dialog,
-                    "Executável obrigatório",
-                    "Escolha um arquivo para iniciar o jogo ou informe um endereço de site.",
-                )
-                return
             source_cover = Path(cover_path["value"]) if cover_path["value"] else None
-            if (
-                source_cover is None
-                and initial_cover is None
-                and (current_cover is None or not current_cover.is_file())
-            ):
-                QMessageBox.warning(
-                    dialog, "Capa obrigatória", "Escolha uma capa para o jogo."
-                )
-                return
 
             game_id = (
                 self._custom_games[game_index]["id"]
@@ -2564,7 +2611,7 @@ class MainWindow(QMainWindow):
                     destination_cover = cover_directory / "capa.png"
                     if not initial_cover.save(str(destination_cover), "PNG"):
                         raise OSError("Não foi possível salvar a capa do jogo.")
-                else:
+                elif current_cover is not None and current_cover.is_file():
                     self._copy_game_asset(
                         game_id,
                         current_cover,
@@ -2572,9 +2619,9 @@ class MainWindow(QMainWindow):
                         f"capa{current_cover.suffix.lower() or '.png'}",
                     )
 
+                executor_directory = game_directory / "executador"
+                executor_directory.mkdir(parents=True, exist_ok=True)
                 if launch_target.lower().startswith(("http://", "https://")):
-                    executor_directory = game_directory / "executador"
-                    executor_directory.mkdir(parents=True, exist_ok=True)
                     for existing_executor in executor_directory.iterdir():
                         if existing_executor.is_file():
                             existing_executor.unlink()
@@ -2583,16 +2630,25 @@ class MainWindow(QMainWindow):
                         encoding="utf-8",
                     )
                 else:
-                    executor_directory = game_directory / "executador"
-                    executor_directory.mkdir(parents=True, exist_ok=True)
-                    executor_source = self._resolve_game_asset_path(launch_target)
-                    if not self._path_is_within(executor_source, executor_directory):
+                    if launch_target:
+                        executor_source = self._resolve_game_asset_path(launch_target)
+                    else:
+                        executor_source = None
+                    if executor_source is None or not self._path_is_within(
+                        executor_source, executor_directory
+                    ):
                         for existing_executor in executor_directory.iterdir():
                             if existing_executor.is_file():
                                 existing_executor.unlink()
-                        self._copy_game_asset(game_id, launch_target, "executador")
+                        if launch_target:
+                            self._copy_game_asset(
+                                game_id,
+                                launch_target,
+                                "executador",
+                            )
 
                 image_directory = game_directory / "imagens"
+                image_directory.mkdir(parents=True, exist_ok=True)
                 for existing_image in image_directory.iterdir():
                     if (
                         existing_image.is_file()
@@ -2612,9 +2668,12 @@ class MainWindow(QMainWindow):
                 saved_game = dict(game_data)
                 saved_game["capa"] = str(
                     next(
-                        path
-                        for path in image_directory.iterdir()
-                        if path.is_file()
+                        (
+                            path
+                            for path in image_directory.iterdir()
+                            if path.is_file()
+                        ),
+                        "",
                     )
                 )
                 url_path = game_directory / "executador" / "url.txt"
@@ -2623,9 +2682,12 @@ class MainWindow(QMainWindow):
                     if url_path.is_file()
                     else str(
                         next(
-                            path
-                            for path in executor_directory.iterdir()
-                            if path.is_file()
+                            (
+                                path
+                                for path in executor_directory.iterdir()
+                                if path.is_file()
+                            ),
+                            "",
                         )
                     )
                 )
