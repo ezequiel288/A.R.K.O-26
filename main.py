@@ -411,7 +411,12 @@ class MainWindow(QMainWindow):
         )
 
     def _update_store_admin_controls(self):
-        self._add_store_game_button.setVisible(self._is_store_admin())
+        is_admin = self._is_store_admin()
+        self._add_store_game_button.setVisible(is_admin)
+        for game_card in getattr(self, "_game_cards", ()):
+            game_card[6].setVisible(is_admin)
+        if hasattr(self, "_game_cards"):
+            self._resize_store_cards_to_fill_panel()
 
     def _build_store_cards(self):
         button_style = (
@@ -516,9 +521,50 @@ class MainWindow(QMainWindow):
             buy_button.setFixedHeight(31)
             buy_button.setStyleSheet(button_style)
             card_layout.addWidget(buy_button)
+
+            admin_buttons = QHBoxLayout()
+            edit_button = QPushButton("Editar")
+            edit_button.setFixedHeight(26)
+            edit_button.setStyleSheet(button_style)
+            edit_button.clicked.connect(
+                lambda checked=False, game_index=index:
+                self.open_edit_store_game_dialog(game_index)
+            )
+            delete_button = QPushButton("Apagar")
+            delete_button.setFixedHeight(26)
+            delete_button.setStyleSheet(
+                "QPushButton { background-color: #C62828; color: white; "
+                "border: 2px solid #C62828; border-radius: 8px; "
+                "font-weight: bold; }"
+                "QPushButton:hover { background-color: #EF5350; "
+                "border-color: #EF5350; }"
+            )
+            delete_button.clicked.connect(
+                lambda checked=False, game_index=index:
+                self.delete_store_game(game_index)
+            )
+            admin_buttons.addWidget(edit_button)
+            admin_buttons.addWidget(delete_button)
+            admin_controls = QWidget(card)
+            admin_controls.setLayout(admin_buttons)
+            admin_controls.setVisible(self._is_store_admin())
+            card_layout.addWidget(admin_controls)
+
             card_layout.addLayout(price_row)
 
-            cards.append((card, cover_label, None, buy_button, price_label, None))
+            cards.append(
+                (
+                    card,
+                    cover_label,
+                    None,
+                    buy_button,
+                    price_label,
+                    None,
+                    admin_controls,
+                    edit_button,
+                    delete_button,
+                )
+            )
             self._store_grid.addWidget(card, index // 5, index % 5)
 
         return tuple(cards)
@@ -541,7 +587,10 @@ class MainWindow(QMainWindow):
             - margins.bottom()
             - self._store_grid.verticalSpacing() * (row_count - 1)
         )
-        card_height = max(370, available_height // row_count)
+        card_height = max(
+            370 + (30 if self._is_store_admin() else 0),
+            available_height // row_count,
+        )
         for card, *_ in self._game_cards:
             card.setFixedHeight(card_height)
 
@@ -1514,16 +1563,37 @@ class MainWindow(QMainWindow):
         return list(games_by_id.values())
 
     def open_add_store_game_dialog(self):
+        self._open_store_game_dialog()
+
+    def open_edit_store_game_dialog(self, game_index):
         if not self._is_store_admin():
             QMessageBox.warning(
                 self,
                 "Acesso restrito",
-                "Somente o usuário Administrador pode adicionar jogos à Store.",
+                "Somente o usuário Administrador pode alterar jogos da Store.",
+            )
+            return
+        if not 0 <= game_index < len(self.STORE_GAMES):
+            QMessageBox.warning(self, "Jogo não encontrado", "Este jogo não existe mais.")
+            return
+        self._open_store_game_dialog(game_index)
+
+    def _open_store_game_dialog(self, game_index=None):
+        if not self._is_store_admin():
+            QMessageBox.warning(
+                self,
+                "Acesso restrito",
+                "Somente o usuário Administrador pode gerenciar jogos da Store.",
             )
             return
 
+        editing_game = (
+            self.STORE_GAMES[game_index] if game_index is not None else None
+        )
         dialog = QDialog(self)
-        dialog.setWindowTitle("Adicionar jogo à Store")
+        dialog.setWindowTitle(
+            "Alterar jogo da Store" if editing_game is not None else "Adicionar jogo à Store"
+        )
         dialog.setMinimumWidth(520)
         dialog.setStyleSheet(
             "QDialog { background-color: #202020; color: white; }"
@@ -1549,8 +1619,15 @@ class MainWindow(QMainWindow):
         company_field = QLineEdit()
         discount_field = QDoubleSpinBox()
         discount_field.setRange(0, 100)
-        discount_field.setDecimals(0)
+        discount_field.setDecimals(2)
         discount_field.setSuffix("%")
+        if editing_game is not None:
+            title_field.setText(editing_game["titulo"])
+            description_field.setPlainText(editing_game["descricao"])
+            price_field.setValue(editing_game["preco"])
+            previous_price_field.setValue(editing_game["preco_ant"])
+            company_field.setText(editing_game["empresa"])
+            discount_field.setValue(editing_game["desconto"] * 100)
         form.addRow("Título:", title_field)
         form.addRow("Descrição:", description_field)
         form.addRow("Preço atual:", price_field)
@@ -1559,26 +1636,27 @@ class MainWindow(QMainWindow):
         form.addRow("Desconto:", discount_field)
 
         image_field = QLineEdit()
-        image_field.setReadOnly(True)
-        image_button = QPushButton("Escolher imagem")
-        image_row = QWidget()
-        image_layout = QHBoxLayout(image_row)
-        image_layout.setContentsMargins(0, 0, 0, 0)
-        image_layout.addWidget(image_field)
-        image_layout.addWidget(image_button)
-        form.addRow("Capa (opcional):", image_row)
-
         executor_field = QLineEdit()
-        executor_field.setPlaceholderText(
-            "Opcional: caminho do executável ou link HTTP/HTTPS"
-        )
-        executor_button = QPushButton("Escolher arquivo")
-        executor_row = QWidget()
-        executor_layout = QHBoxLayout(executor_row)
-        executor_layout.setContentsMargins(0, 0, 0, 0)
-        executor_layout.addWidget(executor_field)
-        executor_layout.addWidget(executor_button)
-        form.addRow("Executável ou link (opcional):", executor_row)
+        if editing_game is None:
+            image_field.setReadOnly(True)
+            image_button = QPushButton("Escolher imagem")
+            image_row = QWidget()
+            image_layout = QHBoxLayout(image_row)
+            image_layout.setContentsMargins(0, 0, 0, 0)
+            image_layout.addWidget(image_field)
+            image_layout.addWidget(image_button)
+            form.addRow("Capa (opcional):", image_row)
+
+            executor_field.setPlaceholderText(
+                "Opcional: caminho do executável ou link HTTP/HTTPS"
+            )
+            executor_button = QPushButton("Escolher arquivo")
+            executor_row = QWidget()
+            executor_layout = QHBoxLayout(executor_row)
+            executor_layout.setContentsMargins(0, 0, 0, 0)
+            executor_layout.addWidget(executor_field)
+            executor_layout.addWidget(executor_button)
+            form.addRow("Executável ou link (opcional):", executor_row)
         layout.addLayout(form)
 
         def choose_image():
@@ -1602,11 +1680,14 @@ class MainWindow(QMainWindow):
             if selected_path:
                 executor_field.setText(selected_path)
 
-        image_button.clicked.connect(choose_image)
-        executor_button.clicked.connect(choose_executor)
+        if editing_game is None:
+            image_button.clicked.connect(choose_image)
+            executor_button.clicked.connect(choose_executor)
 
         buttons = QHBoxLayout()
-        save_button = QPushButton("Adicionar")
+        save_button = QPushButton(
+            "Salvar alterações" if editing_game is not None else "Adicionar"
+        )
         cancel_button = QPushButton("Cancelar")
         buttons.addWidget(save_button)
         buttons.addWidget(cancel_button)
@@ -1628,7 +1709,10 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(dialog, "Dados inválidos", str(error))
                 return
             title_key = validated["titulo"].casefold()
-            if any(game["titulo"].casefold() == title_key for game in self.STORE_GAMES):
+            if any(
+                index != game_index and game["titulo"].casefold() == title_key
+                for index, game in enumerate(self.STORE_GAMES)
+            ):
                 QMessageBox.warning(
                     dialog,
                     "Jogo já cadastrado",
@@ -1637,50 +1721,70 @@ class MainWindow(QMainWindow):
                 return
 
             try:
-                executor = self._normalize_launch_target(executor_field.text())
-                cover = None
-                if image_field.text():
-                    cover = Path(image_field.text()).resolve(strict=True)
-                    if not cover.is_file() or QPixmap(str(cover)).isNull():
-                        raise ValueError("A imagem da capa não é válida.")
+                if editing_game is not None:
+                    txt_path = Path(editing_game["_catalog_file"])
+                    self._write_store_game_txt(data, txt_path)
+                    if data["titulo"] != editing_game["titulo"]:
+                        try:
+                            self._update_store_game_transaction_titles(
+                                game_index,
+                                editing_game["titulo"],
+                                data["titulo"],
+                            )
+                        except (OSError, sqlite3.Error, TypeError, ValueError) as error:
+                            try:
+                                self._write_store_game_txt(editing_game, txt_path)
+                            except OSError as restore_error:
+                                error = OSError(
+                                    f"{error}; não foi possível restaurar os dados "
+                                    f"originais: {restore_error}"
+                                )
+                            raise error
+                else:
+                    executor = self._normalize_launch_target(executor_field.text())
+                    cover = None
+                    if image_field.text():
+                        cover = Path(image_field.text()).resolve(strict=True)
+                        if not cover.is_file() or QPixmap(str(cover)).isNull():
+                            raise ValueError("A imagem da capa não é válida.")
 
-                catalog_number = max(
-                    (
-                        int(path.name.split("-", 1)[0])
-                        for path in self._games_directory.glob("*.txt")
-                        if path.name.split("-", 1)[0].isdigit()
-                    ),
-                    default=-1,
-                ) + 1
-                stem = f"{catalog_number:03d}-{self._store_game_slug(data['titulo'])}"
-                txt_path = self._games_directory / f"{stem}.txt"
-                while txt_path.exists():
-                    catalog_number += 1
+                    catalog_number = max(
+                        (
+                            int(path.name.split("-", 1)[0])
+                            for path in self._games_directory.glob("*.txt")
+                            if path.name.split("-", 1)[0].isdigit()
+                        ),
+                        default=-1,
+                    ) + 1
                     stem = f"{catalog_number:03d}-{self._store_game_slug(data['titulo'])}"
                     txt_path = self._games_directory / f"{stem}.txt"
-                asset_directory = self._games_directory / stem
-                image_directory = asset_directory / "imagens"
-                executor_directory = asset_directory / "executador"
-                image_directory.mkdir(parents=True, exist_ok=True)
-                executor_directory.mkdir(parents=True, exist_ok=True)
-                if cover is not None:
-                    shutil.copy2(
-                        cover,
-                        image_directory / f"capa{cover.suffix.lower()}",
-                    )
-                if executor.lower().startswith(("http://", "https://")):
-                    (executor_directory / "url.txt").write_text(
-                        executor,
-                        encoding="utf-8",
-                    )
-                elif executor:
-                    executor_path = Path(executor)
-                    shutil.copy2(
-                        executor_path,
-                        executor_directory / executor_path.name,
-                    )
-                self._write_store_game_txt(data, txt_path)
-            except (OSError, RuntimeError, TypeError, ValueError) as error:
+                    while txt_path.exists():
+                        catalog_number += 1
+                        stem = f"{catalog_number:03d}-{self._store_game_slug(data['titulo'])}"
+                        txt_path = self._games_directory / f"{stem}.txt"
+                    asset_directory = self._games_directory / stem
+                    image_directory = asset_directory / "imagens"
+                    executor_directory = asset_directory / "executador"
+                    image_directory.mkdir(parents=True, exist_ok=True)
+                    executor_directory.mkdir(parents=True, exist_ok=True)
+                    if cover is not None:
+                        shutil.copy2(
+                            cover,
+                            image_directory / f"capa{cover.suffix.lower()}",
+                        )
+                    if executor.lower().startswith(("http://", "https://")):
+                        (executor_directory / "url.txt").write_text(
+                            executor,
+                            encoding="utf-8",
+                        )
+                    elif executor:
+                        executor_path = Path(executor)
+                        shutil.copy2(
+                            executor_path,
+                            executor_directory / executor_path.name,
+                        )
+                    self._write_store_game_txt(data, txt_path)
+            except (OSError, RuntimeError, sqlite3.Error, TypeError, ValueError) as error:
                 if "asset_directory" in locals() and not txt_path.exists():
                     try:
                         shutil.rmtree(asset_directory)
@@ -1691,17 +1795,245 @@ class MainWindow(QMainWindow):
                         )
                 QMessageBox.critical(
                     dialog,
-                    "Erro ao adicionar jogo",
+                    "Erro ao salvar jogo",
                     f"Não foi possível salvar o jogo: {error}",
                 )
                 return
 
             self.STORE_GAMES = self._load_store_catalog()
             self._rebuild_store_cards()
+            if self._current_user_email is not None:
+                self._load_user_library(self._current_user_email)
+                self._refresh_library()
             dialog.accept()
 
         save_button.clicked.connect(save_store_game)
         dialog.exec()
+
+    def _update_store_game_transaction_titles(self, game_index, old_title, new_title):
+        connection = self.transacao_repo.conexao
+        with connection:
+            rows = connection.execute(
+                "SELECT id, jogos FROM transacoes"
+            ).fetchall()
+            for row in rows:
+                games = json.loads(row["jogos"])
+                changed = False
+                for item in games:
+                    if not isinstance(item, dict):
+                        continue
+                    if (
+                        str(item.get("id")) == str(game_index)
+                        and (
+                            not item.get("titulo")
+                            or str(item["titulo"]).casefold() == old_title.casefold()
+                        )
+                    ):
+                        item["titulo"] = new_title
+                        changed = True
+                if changed:
+                    connection.execute(
+                        "UPDATE transacoes SET jogos = ? WHERE id = ?",
+                        (json.dumps(games, ensure_ascii=False), row["id"]),
+                    )
+
+        for transaction in self._transactions:
+            for item in transaction["jogos"]:
+                if not isinstance(item, dict):
+                    continue
+                if (
+                    str(item.get("id")) == str(game_index)
+                    and (
+                        not item.get("titulo")
+                        or str(item["titulo"]).casefold() == old_title.casefold()
+                    )
+                ):
+                    item["titulo"] = new_title
+
+    def delete_store_game(self, game_index):
+        if not self._is_store_admin():
+            QMessageBox.warning(
+                self,
+                "Acesso restrito",
+                "Somente o usuário Administrador pode apagar jogos da Store.",
+            )
+            return
+        if not 0 <= game_index < len(self.STORE_GAMES):
+            QMessageBox.warning(self, "Jogo não encontrado", "Este jogo não existe mais.")
+            return
+        if self._transactions_load_error or self._reviews_load_error:
+            QMessageBox.warning(
+                self,
+                "Exclusão indisponível",
+                "Não foi possível carregar compras e avaliações. Reinicie o aplicativo "
+                "e tente novamente antes de apagar o jogo.",
+            )
+            return
+
+        game = self.STORE_GAMES[game_index]
+        confirmation = QMessageBox.question(
+            self,
+            "Apagar jogo",
+            f"Deseja apagar “{game['titulo']}” da Store? Esta ação não pode ser desfeita.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirmation != QMessageBox.StandardButton.Yes:
+            return
+
+        catalog_path = Path(game["_catalog_file"])
+        asset_directory = self._store_asset_directory(game)
+        staging_directory = self._games_directory / f".exclusao-{uuid.uuid4().hex}"
+        staged_catalog = staging_directory / catalog_path.name
+        staged_assets = staging_directory / asset_directory.name
+        try:
+            staging_directory.mkdir()
+            catalog_path.replace(staged_catalog)
+            if asset_directory.exists():
+                asset_directory.replace(staged_assets)
+            self._reindex_deleted_store_game(game_index, game)
+        except (OSError, sqlite3.Error, TypeError, ValueError, json.JSONDecodeError) as error:
+            try:
+                if staged_catalog.exists():
+                    staged_catalog.replace(catalog_path)
+                if staged_assets.exists():
+                    staged_assets.replace(asset_directory)
+                if staging_directory.exists():
+                    staging_directory.rmdir()
+            except OSError as restore_error:
+                error = OSError(
+                    f"{error}; não foi possível restaurar os arquivos: {restore_error}"
+                )
+            QMessageBox.critical(
+                self,
+                "Erro ao apagar jogo",
+                f"Não foi possível apagar o jogo: {error}",
+            )
+            return
+
+        try:
+            shutil.rmtree(staging_directory)
+        except OSError as error:
+            QMessageBox.warning(
+                self,
+                "Jogo apagado",
+                f"O jogo foi apagado, mas não foi possível remover todos os arquivos "
+                f"temporários: {error}",
+            )
+        self.STORE_GAMES = self._load_store_catalog()
+        self._cart_games = {
+            index - 1 if index > game_index else index
+            for index in self._cart_games
+            if index != game_index
+        }
+        self._rebuild_store_cards()
+        if self._current_user_email is not None:
+            self._load_user_library(self._current_user_email)
+            self._refresh_library()
+
+    def _reindex_deleted_store_game(self, removed_index, removed_game):
+        connection = self.transacao_repo.conexao
+        with connection:
+            rows = connection.execute("SELECT id, jogos FROM transacoes").fetchall()
+            for row in rows:
+                games = json.loads(row["jogos"])
+                changed = False
+                for item in games:
+                    if not isinstance(item, dict):
+                        continue
+                    try:
+                        item_index = int(item.get("id"))
+                    except (AttributeError, TypeError, ValueError):
+                        continue
+                    if item_index < removed_index:
+                        continue
+                    item_title = item.get("titulo")
+                    referenced_game = (
+                        self.STORE_GAMES[item_index]
+                        if item_index < len(self.STORE_GAMES)
+                        else None
+                    )
+                    if item_title and (
+                        referenced_game is None
+                        or str(item_title).casefold()
+                        != referenced_game["titulo"].casefold()
+                    ):
+                        continue
+                    if item_index == removed_index:
+                        if (
+                            item_title
+                            and str(item_title).casefold()
+                            != removed_game["titulo"].casefold()
+                        ):
+                            continue
+                        item["id"] = f"removido:{row['id']}:{item['id']}"
+                    else:
+                        item["id"] = (
+                            item_index - 1
+                            if isinstance(item.get("id"), int)
+                            else str(item_index - 1)
+                        )
+                    changed = True
+                if changed:
+                    connection.execute(
+                        "UPDATE transacoes SET jogos = ? WHERE id = ?",
+                        (json.dumps(games, ensure_ascii=False), row["id"]),
+                    )
+            connection.execute(
+                "DELETE FROM avaliacoes WHERE jogo_id = ?", (removed_index,)
+            )
+            connection.execute(
+                "UPDATE avaliacoes SET jogo_id = jogo_id - 1 WHERE jogo_id > ?",
+                (removed_index,),
+            )
+
+        for transaction in self._transactions:
+            for item in transaction["jogos"]:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    item_index = int(item.get("id"))
+                except (AttributeError, TypeError, ValueError):
+                    continue
+                if item_index < removed_index:
+                    continue
+                item_title = item.get("titulo")
+                referenced_game = (
+                    self.STORE_GAMES[item_index]
+                    if item_index < len(self.STORE_GAMES)
+                    else None
+                )
+                if item_title and (
+                    referenced_game is None
+                    or str(item_title).casefold()
+                    != referenced_game["titulo"].casefold()
+                ):
+                    continue
+                if item_index == removed_index:
+                    if (
+                        item_title
+                        and str(item_title).casefold()
+                        != removed_game["titulo"].casefold()
+                    ):
+                        continue
+                    item["id"] = f"removido:{transaction['id']}:{item['id']}"
+                else:
+                    item["id"] = (
+                        item_index - 1
+                        if isinstance(item.get("id"), int)
+                        else str(item_index - 1)
+                    )
+        self._reviews = [
+            {
+                **review,
+                "jogo_id": str(
+                    int(review["jogo_id"])
+                    - (int(review["jogo_id"]) > removed_index)
+                ),
+            }
+            for review in self._reviews
+            if int(review["jogo_id"]) != removed_index
+        ]
 
     def _rebuild_store_cards(self):
         while self._store_grid.count():
