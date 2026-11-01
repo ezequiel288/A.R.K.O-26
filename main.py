@@ -538,7 +538,7 @@ class MainWindow(QMainWindow):
             card_layout.addWidget(buy_button)
 
             admin_buttons = QHBoxLayout()
-            edit_button = QPushButton("Editar")
+            edit_button = QPushButton("Alterar")
             edit_button.setFixedHeight(26)
             edit_button.setStyleSheet(button_style)
             edit_button.clicked.connect(
@@ -1524,6 +1524,51 @@ class MainWindow(QMainWindow):
                 return images[0]
         return self._find_store_cover(game["titulo"])
 
+    def _store_game_executor_target(self, game):
+        executor_directory = self._store_asset_directory(game) / "executador"
+        url_path = executor_directory / "url.txt"
+        if url_path.is_file():
+            return url_path.read_text(encoding="utf-8").strip()
+        executors = sorted(
+            path for path in executor_directory.iterdir() if path.is_file()
+        ) if executor_directory.is_dir() else []
+        return str(executors[0]) if executors else ""
+
+    def _replace_store_game_asset_directory(
+        self, game, directory_name, source_path=None, url=None
+    ):
+        asset_directory = self._store_asset_directory(game)
+        destination_directory = asset_directory / directory_name
+        staging_directory = asset_directory / f".{directory_name}-{uuid.uuid4().hex}.tmp"
+        backup_directory = asset_directory / f".{directory_name}-{uuid.uuid4().hex}.bak"
+        try:
+            staging_directory.mkdir(parents=True)
+            if url is not None:
+                (staging_directory / "url.txt").write_text(url, encoding="utf-8")
+            elif source_path is not None:
+                source = Path(source_path)
+                file_name = (
+                    f"capa{source.suffix.lower()}"
+                    if directory_name == "imagens"
+                    else source.name
+                )
+                shutil.copy2(source, staging_directory / file_name)
+
+            if destination_directory.exists():
+                destination_directory.replace(backup_directory)
+            try:
+                staging_directory.replace(destination_directory)
+            except OSError:
+                if backup_directory.exists():
+                    backup_directory.replace(destination_directory)
+                raise
+            if backup_directory.exists():
+                shutil.rmtree(backup_directory)
+        except OSError:
+            if staging_directory.exists():
+                shutil.rmtree(staging_directory)
+            raise
+
     def _read_legacy_game_records(self):
         project_root = Path(__file__).resolve().parent
         legacy_paths = (
@@ -1654,26 +1699,34 @@ class MainWindow(QMainWindow):
 
         image_field = QLineEdit()
         executor_field = QLineEdit()
-        if editing_game is None:
-            image_field.setReadOnly(True)
-            image_button = QPushButton("Escolher imagem")
-            image_row = QWidget()
-            image_layout = QHBoxLayout(image_row)
-            image_layout.setContentsMargins(0, 0, 0, 0)
-            image_layout.addWidget(image_field)
-            image_layout.addWidget(image_button)
-            form.addRow("Capa (opcional):", image_row)
+        image_field.setReadOnly(True)
+        image_button = QPushButton(
+            "Mudar capa" if editing_game is not None else "Escolher imagem"
+        )
+        image_row = QWidget()
+        image_layout = QHBoxLayout(image_row)
+        image_layout.setContentsMargins(0, 0, 0, 0)
+        image_layout.addWidget(image_field)
+        image_layout.addWidget(image_button)
+        form.addRow("Capa (opcional):", image_row)
 
-            executor_field.setPlaceholderText(
-                "Opcional: caminho do executável ou link HTTP/HTTPS"
-            )
-            executor_button = QPushButton("Escolher arquivo")
-            executor_row = QWidget()
-            executor_layout = QHBoxLayout(executor_row)
-            executor_layout.setContentsMargins(0, 0, 0, 0)
-            executor_layout.addWidget(executor_field)
-            executor_layout.addWidget(executor_button)
-            form.addRow("Executável ou link (opcional):", executor_row)
+        executor_field.setPlaceholderText(
+            "Opcional: caminho do executável ou link HTTP/HTTPS"
+        )
+        executor_button = QPushButton(
+            "Mudar executável" if editing_game is not None else "Escolher arquivo"
+        )
+        executor_row = QWidget()
+        executor_layout = QHBoxLayout(executor_row)
+        executor_layout.setContentsMargins(0, 0, 0, 0)
+        executor_layout.addWidget(executor_field)
+        executor_layout.addWidget(executor_button)
+        form.addRow("Executável ou link (opcional):", executor_row)
+        if editing_game is not None:
+            cover_path = self._store_game_cover_path(editing_game)
+            if cover_path is not None:
+                image_field.setText(str(cover_path))
+            executor_field.setText(self._store_game_executor_target(editing_game))
         layout.addLayout(form)
 
         def choose_image():
@@ -1697,9 +1750,8 @@ class MainWindow(QMainWindow):
             if selected_path:
                 executor_field.setText(selected_path)
 
-        if editing_game is None:
-            image_button.clicked.connect(choose_image)
-            executor_button.clicked.connect(choose_executor)
+        image_button.clicked.connect(choose_image)
+        executor_button.clicked.connect(choose_executor)
 
         buttons = QHBoxLayout()
         save_button = QPushButton(
@@ -1739,6 +1791,24 @@ class MainWindow(QMainWindow):
 
             try:
                 if editing_game is not None:
+                    cover_text = image_field.text().strip()
+                    current_cover = self._store_game_cover_path(editing_game)
+                    if cover_text and (
+                        current_cover is None
+                        or Path(cover_text).resolve() != current_cover.resolve()
+                    ):
+                        cover = Path(cover_text).resolve(strict=True)
+                        if not cover.is_file() or QPixmap(str(cover)).isNull():
+                            raise ValueError("A imagem da capa não é válida.")
+
+                    executor_text = executor_field.text().strip()
+                    current_executor = self._store_game_executor_target(editing_game)
+                    normalized_executor = (
+                        self._normalize_launch_target(executor_text)
+                        if executor_text and executor_text != current_executor
+                        else ""
+                    )
+
                     txt_path = Path(editing_game["_catalog_file"])
                     self._write_store_game_txt(data, txt_path)
                     if data["titulo"] != editing_game["titulo"]:
@@ -1757,6 +1827,30 @@ class MainWindow(QMainWindow):
                                     f"originais: {restore_error}"
                                 )
                             raise error
+                    if cover_text and (
+                        current_cover is None
+                        or Path(cover_text).resolve() != current_cover.resolve()
+                    ):
+                        self._replace_store_game_asset_directory(
+                            editing_game,
+                            "imagens",
+                            source_path=cover,
+                        )
+                    if normalized_executor:
+                        if normalized_executor.lower().startswith(
+                            ("http://", "https://")
+                        ):
+                            self._replace_store_game_asset_directory(
+                                editing_game,
+                                "executador",
+                                url=normalized_executor,
+                            )
+                        else:
+                            self._replace_store_game_asset_directory(
+                                editing_game,
+                                "executador",
+                                source_path=normalized_executor,
+                            )
                 else:
                     executor = self._normalize_launch_target(executor_field.text())
                     cover = None
