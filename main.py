@@ -66,6 +66,7 @@ class Ui_MainWindow(Ui_MainWindowBase):
 
 class MainWindow(QMainWindow):
     PASSWORD_HASH_ITERATIONS = 600_000
+    GAME_GRID_COLUMNS = 8
 
     @staticmethod
     def _supported_image_extensions():
@@ -393,7 +394,7 @@ class MainWindow(QMainWindow):
         self._store_grid = QGridLayout(self._store_content)
         self._store_grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         self._store_grid.setContentsMargins(12, 12, 12, 12)
-        self._store_grid.setHorizontalSpacing(24)
+        self._store_grid.setHorizontalSpacing(8)
         self._store_grid.setVerticalSpacing(24)
         self._store_scroll.setWidget(self._store_content)
         self._add_store_game_button = QPushButton("Adicionar jogo à Store")
@@ -402,6 +403,19 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._add_store_game_button)
         layout.addWidget(self._store_scroll)
         self._store_panel.hide()
+
+    def _store_column_count(self):
+        return self.GAME_GRID_COLUMNS
+
+    def _reflow_store_grid(self):
+        columns = self._store_column_count()
+        visible_cards = [
+            card[0] for card in self._game_cards if not card[0].isHidden()
+        ]
+        for card, *_ in self._game_cards:
+            self._store_grid.removeWidget(card)
+        for position, card in enumerate(visible_cards):
+            self._store_grid.addWidget(card, position // columns, position % columns)
 
     def _is_store_admin(self):
         nomes_admin = {"administrador", "arthur"}
@@ -426,6 +440,7 @@ class MainWindow(QMainWindow):
             "QPushButton:hover { background-color: #FFFFFF; border-color: #FFFFFF; }"
         )
         cards = []
+        columns = self._store_column_count()
 
         for index, game in enumerate(self.STORE_GAMES):
             card = QFrame(self._store_content)
@@ -565,7 +580,7 @@ class MainWindow(QMainWindow):
                     delete_button,
                 )
             )
-            self._store_grid.addWidget(card, index // 5, index % 5)
+            self._store_grid.addWidget(card, index // columns, index % columns)
 
         return tuple(cards)
 
@@ -617,10 +632,11 @@ class MainWindow(QMainWindow):
             self._set_font_size(self.ui.BemVindo, 21, bold=True)
             self.ui.BemVindo.show()
         elif page == "store":
-            self._resize_store_cards_to_fill_panel()
             for index, card in enumerate(self._game_cards):
                 card[0].show()
                 self._set_store_cart_button(index)
+            self._reflow_store_grid()
+            self._resize_store_cards_to_fill_panel()
             self._store_panel.show()
         elif page == "library":
             self._refresh_library()
@@ -1187,8 +1203,9 @@ class MainWindow(QMainWindow):
             if is_match:
                 matching_cards.append(card)
 
+        columns = self._store_column_count()
         for position, card in enumerate(matching_cards):
-            self._store_grid.addWidget(card, position // 5, position % 5)
+            self._store_grid.addWidget(card, position // columns, position % columns)
         self._resize_store_cards_to_fill_panel()
 
         if search_text and not any(matches):
@@ -2275,7 +2292,7 @@ class MainWindow(QMainWindow):
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
         )
         self._library_grid.setContentsMargins(12, 12, 12, 12)
-        self._library_grid.setHorizontalSpacing(24)
+        self._library_grid.setHorizontalSpacing(8)
         self._library_grid.setVerticalSpacing(24)
         self._library_scroll.setWidget(self._library_content)
         self._library_layout.addWidget(self._library_scroll, 0, 0)
@@ -2303,7 +2320,7 @@ class MainWindow(QMainWindow):
         self._cart_grid = QGridLayout(self._cart_content)
         self._cart_grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         self._cart_grid.setContentsMargins(8, 8, 8, 8)
-        self._cart_grid.setHorizontalSpacing(20)
+        self._cart_grid.setHorizontalSpacing(8)
         self._cart_grid.setVerticalSpacing(20)
         self._cart_scroll.setWidget(self._cart_content)
         layout.addWidget(self._cart_scroll)
@@ -2348,9 +2365,8 @@ class MainWindow(QMainWindow):
             return
 
         self._cart_purchase_button.show()
-        available_width = max(1, self.ui.Menu3.width() - 64)
         card_width = 201
-        columns = max(1, (available_width + 20) // (card_width + 20))
+        columns = self.GAME_GRID_COLUMNS
 
         for position, game_index in enumerate(sorted(self._cart_games)):
             game = self.STORE_GAMES[game_index]
@@ -2654,7 +2670,7 @@ class MainWindow(QMainWindow):
         cards.append(add_card)
 
         for index, card in enumerate(cards):
-            row, column = divmod(index, 5)
+            row, column = divmod(index, self.GAME_GRID_COLUMNS)
             self._library_grid.addWidget(card, row, column)
 
         if self._custom_games_load_error:
@@ -3943,6 +3959,8 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, "_content_panels"):
             self._sync_all_panels_to_main_area()
+            if hasattr(self, "_game_cards"):
+                self._reflow_store_grid()
             self._resize_store_cards_to_fill_panel()
             if getattr(self, "_active_page", None) == "cart":
                 self._refresh_cart_page()
